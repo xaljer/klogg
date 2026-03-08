@@ -537,7 +537,7 @@ class Configuration final : public Persistable<Configuration> {
     // Configuration settings
     mutable QFont mainFont_ = { "DejaVu Sans Mono", 10 };
     SearchRegexpType mainRegexpType_ = SearchRegexpType::ExtendedRegexp;
-    SearchRegexpType quickfindRegexpType_ = SearchRegexpType::FixedString;
+    SearchRegexpType quickfindRegexpType_ = SearchRegexpType::ExtendedRegexp;
     bool quickfindIncremental_ = true;
 
     QString language_{ "en" };
@@ -555,7 +555,7 @@ class Configuration final : public Persistable<Configuration> {
 
     bool loadLastSession_ = true;
     bool followFileOnLoad_ = false;
-    bool allowMultipleWindows_ = false;
+    bool allowMultipleWindows_ = true;
 
     // View settings
     bool overviewVisible_ = true;
@@ -577,7 +577,7 @@ class Configuration final : public Persistable<Configuration> {
     int indexReadBufferSizeMb_ = 16;
     int searchReadBufferSizeLines_ = 10000;
     int searchThreadPoolSize_ = 0;
-    bool keepFileClosed_ = false;
+    bool keepFileClosed_ = true;
     bool useCompressedIndex_ = true;
 
     bool enableLogging_ = false;
@@ -586,7 +586,7 @@ class Configuration final : public Persistable<Configuration> {
     bool enableVersionChecking_ = true;
 
     bool extractArchives_ = true;
-    bool extractArchivesAlways_ = false;
+    bool extractArchivesAlways_ = true;
 
     bool verifySslPeers_ = true;
 
@@ -604,7 +604,7 @@ class Configuration final : public Persistable<Configuration> {
     bool enableMainSearchHighlightVariance_ = false;
 
     bool allowFollowOnScroll_ = true;
-    bool autoRunSearchOnPatternChange_ = false;
+    bool autoRunSearchOnPatternChange_ = true;
 
     bool optimizeForNotLatinEncodings_ = false;
 

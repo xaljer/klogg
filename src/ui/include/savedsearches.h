@@ -56,7 +56,7 @@ class SavedSearches final : public Persistable<SavedSearches, session_settings> 
   private:
     static constexpr int SAVEDSEARCHES_VERSION = 1;
 
-    static constexpr int MaxNumberOfRecentSearches = 50;
+    static constexpr int MaxNumberOfRecentSearches = 100;
 
     int historySize_ = MaxNumberOfRecentSearches;
     QStringList savedSearches_;

@@ -342,9 +342,9 @@ void PatternInputWidget::onChipRemoveClicked()
         if ( !isChipMode_ ) {
             return;
         }
-        int index = patterns_.indexOf( chipText );
+        const qsizetype index = patterns_.indexOf( chipText );
         if ( index >= 0 ) {
-            removeChip( index );
+            removeChip( static_cast<int>( index ) );
         }
     } );
 }

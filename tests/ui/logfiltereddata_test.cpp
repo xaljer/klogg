@@ -59,7 +59,7 @@ void runSearch( LogFilteredData* filtered_data, const QString& regexp,
 {
 
     QTimer::singleShot(
-        50, [ & ]() { filtered_data->runSearch( RegularExpressionPattern( regexp ) ); } );
+        50, filtered_data, [ & ]() { filtered_data->runSearch( RegularExpressionPattern( regexp ) ); } );
 
     int progress = 0;
     do {

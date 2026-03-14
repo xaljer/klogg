@@ -179,6 +179,8 @@ class MainWindow : public QMainWindow {
     void followSet( bool checked );
     // Is emitted when the 'text wrap' option is enabled/disabled
     void textWrapSet( bool checked );
+    // Is emitted when the 'chip mode' option is enabled/disabled
+    void chipModeSet( bool checked );
     // Is emitted before the QuickFind box is activated,
     // to allow crawlers to get search in the right view.
     void enteringQuickFind();
@@ -265,6 +267,7 @@ class MainWindow : public QMainWindow {
     QAction* lineNumbersVisibleInFilteredAction;
     QAction* followAction;
     QAction* textWrapAction;
+    QAction* chipModeAction;
     QAction* reloadAction;
     QAction* stopAction;
     QAction* editHighlightersAction;

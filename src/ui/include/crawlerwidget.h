@@ -62,6 +62,7 @@
 #include "logfiltereddata.h"
 #include "logmainview.h"
 #include "overview.h"
+#include "patterninputwidget.h"
 #include "predefinedfilterscombobox.h"
 #include "signalmux.h"
 #include "viewinterface.h"
@@ -110,6 +111,8 @@ class CrawlerWidget : public QSplitter,
 
     bool isTextWrapEnabled() const;
 
+    bool isChipMode() const;
+
     void registerShortcuts();
 
   public Q_SLOTS:
@@ -126,6 +129,8 @@ class CrawlerWidget : public QSplitter,
 
     // Instructs the widget to reconfigure itself because Config() has changed.
     void applyConfiguration();
+
+    void setChipMode( bool enabled );
 
   public:
     template <class T>
@@ -161,6 +166,8 @@ class CrawlerWidget : public QSplitter,
     void followSet( bool checked );
     // Sent when text wrap mode is enabled/disabled
     void textWrapSet( bool checked );
+    // Sent when chip mode is enabled/disabled
+    void chipModeSet( bool checked );
     // Sent up to the MainWindow to enable/disable the follow mode
     void followModeChanged( bool follow );
     // Sent up when the current line number is updated
@@ -340,6 +347,7 @@ class CrawlerWidget : public QSplitter,
     QString escapeSearchPattern( const QString& searchPattern, bool isRegex = false ) const;
     QString& combinePatterns( QString& currentPattern, const QString& newPattern ) const;
     void setSearchPattern( const QString& searchPattern );
+    QString getCurrentSearchText() const;
 
     void resetStateOnSearchPatternChanges();
 
@@ -379,6 +387,7 @@ class CrawlerWidget : public QSplitter,
     PredefinedFiltersComboBox* predefinedFilters_;
 
     QComboBox* searchLineEdit_;
+    PatternInputWidget* patternInputWidget_;
     QMenu* searchLineContextMenu_;
     QCompleter* searchLineCompleter_;
 

@@ -397,23 +397,23 @@ void CrawlerWidget::startNewSearch()
     }
 
     tabbedFilteredView_->setTabText( tabbedFilteredView_->currentIndex(),
-                                     "Find \"" + searchLineEdit_->currentText() + "\"" );
+                                     "Find \"" + getCurrentSearchText() + "\"" );
 
     // Record the search line in the recent list
     // (reload the list first in case another glogg changed it)
     const auto& searches = SavedSearches::getSynced();
-    savedSearches_->addRecent( searchLineEdit_->currentText() );
+    savedSearches_->addRecent( getCurrentSearchText() );
     searches.save();
 
     // Update the SearchLine (history)
     updateSearchCombo();
     // Call the private function to do the search
-    replaceCurrentSearch( searchLineEdit_->currentText() );
+    replaceCurrentSearch( getCurrentSearchText() );
 }
 
 void CrawlerWidget::updatePredefinedFiltersWidget()
 {
-    predefinedFilters_->updateSearchPattern( searchLineEdit_->currentText(),
+    predefinedFilters_->updateSearchPattern( getCurrentSearchText(),
                                              booleanButton_->isChecked() );
 }
 
@@ -466,7 +466,7 @@ void CrawlerWidget::editSearchHistory()
 
 void CrawlerWidget::saveAsPredefinedFilter()
 {
-    const auto currentText = searchLineEdit_->currentText();
+    const auto currentText = getCurrentSearchText();
 
     Q_EMIT saveCurrentSearchAsPredefinedFilter( currentText );
 }
@@ -709,7 +709,7 @@ void CrawlerWidget::loadingFinishedHandler( LoadingStatus status )
         searchEndLine_ = LineNumber( logData_->getNbLine().get() );
         if ( searchState_.isFileTruncated() )
             // We need to restart the search
-            replaceCurrentSearch( searchLineEdit_->currentText() );
+            replaceCurrentSearch( getCurrentSearchText() );
         else
             logFilteredData_->updateSearch( searchStartLine_, searchEndLine_ );
     }
@@ -818,6 +818,7 @@ void CrawlerWidget::booleanCombiningChangedHandler( bool )
 
 void CrawlerWidget::useRegexpChangeHandler( bool )
 {
+    patternInputWidget_->setRegexMode( useRegexpButton_->isChecked() );
     resetStateOnSearchPatternChanges();
 }
 
@@ -914,6 +915,7 @@ void CrawlerWidget::replaceSearch( const QString& searchString )
 void CrawlerWidget::setSearchPattern( const QString& searchPattern )
 {
     searchLineEdit_->setEditText( searchPattern );
+    patternInputWidget_->setText( searchPattern );
     updatePredefinedFiltersWidget();
     // Set the focus to lineEdit so that the user can press 'Return' immediately
     searchLineEdit_->lineEdit()->setFocus();
@@ -921,6 +923,37 @@ void CrawlerWidget::setSearchPattern( const QString& searchPattern )
     if ( Configuration::get().autoRunSearchOnPatternChange() ) {
         dispatchToMainThread( [ this ] { startNewSearch(); } );
     }
+}
+
+QString CrawlerWidget::getCurrentSearchText() const
+{
+    if ( patternInputWidget_->isChipMode() ) {
+        return patternInputWidget_->text();
+    }
+    return searchLineEdit_->currentText();
+}
+
+void CrawlerWidget::setChipMode( bool enabled )
+{
+    patternInputWidget_->setRegexMode( useRegexpButton_->isChecked() );
+    patternInputWidget_->setChipMode( enabled );
+    if ( enabled ) {
+        patternInputWidget_->setText( searchLineEdit_->currentText() );
+        searchLineEdit_->hide();
+        patternInputWidget_->show();
+        setFocusProxy( patternInputWidget_ );
+    }
+    else {
+        searchLineEdit_->setEditText( patternInputWidget_->text() );
+        patternInputWidget_->hide();
+        searchLineEdit_->show();
+        setFocusProxy( searchLineEdit_ );
+    }
+}
+
+bool CrawlerWidget::isChipMode() const
+{
+    return patternInputWidget_->isChipMode();
 }
 
 void CrawlerWidget::mouseHoveredOverMatch( LineNumber line )
@@ -1085,6 +1118,10 @@ void CrawlerWidget::setup()
     searchLineEdit_->lineEdit()->setMaxLength( std::numeric_limits<int>::max() / 1024 );
     searchLineEdit_->setContentsMargins( 2, 2, 2, 2 );
 
+    patternInputWidget_ = new PatternInputWidget( this );
+    patternInputWidget_->setPlaceholderText( tr( "Enter search pattern..." ) );
+    patternInputWidget_->hide();
+
     QAction* clearSearchHistoryAction = new QAction( tr( "Clear search history" ), this );
     QAction* editSearchHistoryAction = new QAction( tr( "Edit search history" ), this );
     QAction* saveAsPredefinedFilterAction = new QAction( tr( "Save as Filter" ), this );
@@ -1124,6 +1161,9 @@ void CrawlerWidget::setup()
 
     predefinedFilters_ = new PredefinedFiltersComboBox( this );
 
+    visibilityBox_->setSizeAdjustPolicy( QComboBox::AdjustToContents );
+    predefinedFilters_->setSizeAdjustPolicy( QComboBox::AdjustToContents );
+
     auto* searchLineLayout = new QHBoxLayout;
     searchLineLayout->setContentsMargins( 2, 2, 2, 2 );
 
@@ -1135,6 +1175,7 @@ void CrawlerWidget::setup()
     searchLineLayout->addWidget( searchRefreshButton_ );
     searchLineLayout->addWidget( predefinedFilters_ );
     searchLineLayout->addWidget( searchLineEdit_ );
+    searchLineLayout->addWidget( patternInputWidget_ );
     searchLineLayout->addWidget( clearButton_ );
     searchLineLayout->addWidget( searchButton_ );
     searchLineLayout->addWidget( keepSearchResultsButton_ );
@@ -1199,6 +1240,20 @@ void CrawlerWidget::setup()
     connect( searchButton_, &QToolButton::clicked, this, &CrawlerWidget::startNewSearch );
     connect( stopButton_, &QToolButton::clicked, this, &CrawlerWidget::stopSearch );
     connect( clearButton_, &QToolButton::clicked, searchLineEdit_, &QComboBox::clearEditText );
+    connect( clearButton_, &QToolButton::clicked, patternInputWidget_, &PatternInputWidget::clear );
+
+    connect( patternInputWidget_, &PatternInputWidget::textChanged, this,
+             &CrawlerWidget::searchTextChangeHandler );
+    connect( patternInputWidget_, &PatternInputWidget::returnPressed, searchButton_,
+             &QToolButton::click );
+    connect( patternInputWidget_, &PatternInputWidget::chipChanged, this,
+             [ this ]( const QString& ) {
+                 resetStateOnSearchPatternChanges();
+                 updatePredefinedFiltersWidget();
+                 if ( Configuration::get().autoRunSearchOnPatternChange() ) {
+                     dispatchToMainThread( [ this ] { startNewSearch(); } );
+                 }
+             } );
 
     connect( visibilityBox_, QOverload<int>::of( &QComboBox::currentIndexChanged ), this,
              &CrawlerWidget::changeFilteredViewVisibility );
@@ -1229,6 +1284,9 @@ void CrawlerWidget::setup()
              &CrawlerWidget::followModeChanged );
 
     connect( this, &CrawlerWidget::textWrapSet, logMainView_, &LogMainView::textWrapSet );
+
+    // Chip mode option
+    connect( this, &CrawlerWidget::chipModeSet, this, &CrawlerWidget::setChipMode );
 
     // Detect activity in the views
     connect( logMainView_, &LogMainView::activity, this, &CrawlerWidget::activityDetected );

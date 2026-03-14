@@ -288,6 +288,11 @@
         <source>Detected as %1</source>
         <translation>Detected as %1</translation>
     </message>
+    <message>
+        <location filename="../../ui/src/crawlerwidget.cpp" line="1122"/>
+        <source>Enter search pattern...</source>
+        <translation>Enter search pattern...</translation>
+    </message>
 </context>
 <context>
     <name>HighlighterEdit</name>
@@ -680,6 +685,16 @@
         <location filename="../../ui/src/mainwindow.cpp" line="2270"/>
         <source>This will shutdown klogg and generate diagnostic crash dump. Continue?</source>
         <translation>This will shutdown klogg and generate diagnostic crash dump. Continue?</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindow.cpp" line="577"/>
+        <source>Chip Input Mode</source>
+        <translation>Chip Input Mode</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindow.cpp" line="579"/>
+        <source>Toggle chip input mode for search patterns</source>
+        <translation>Toggle chip input mode for search patterns</translation>
     </message>
 </context>
 <context>

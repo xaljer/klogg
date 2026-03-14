@@ -156,6 +156,7 @@ MainWindow::MainWindow( WindowSession session )
     // Send actions to the crawlerwidget
     signalMux_.connect( this, SIGNAL( followSet( bool ) ), SIGNAL( followSet( bool ) ) );
     signalMux_.connect( this, SIGNAL( textWrapSet( bool ) ), SIGNAL( textWrapSet( bool ) ) );
+    signalMux_.connect( this, SIGNAL( chipModeSet( bool ) ), SIGNAL( chipModeSet( bool ) ) );
     signalMux_.connect( this, SIGNAL( optionsChanged() ), SLOT( applyConfiguration() ) );
     signalMux_.connect( this, SIGNAL( enteringQuickFind() ), SLOT( enteringQuickFind() ) );
     signalMux_.connect( &quickFindWidget_, SIGNAL( close() ), SLOT( exitingQuickFind() ) );
@@ -573,6 +574,11 @@ void MainWindow::createActions()
     textWrapAction->setEnabled( true );
     connect( textWrapAction, &QAction::toggled, this, &MainWindow::textWrapSet );
 
+    chipModeAction = new QAction( tr( "Chip Input Mode" ), this );
+    chipModeAction->setCheckable( true );
+    chipModeAction->setStatusTip( tr( "Toggle chip input mode for search patterns" ) );
+    connect( chipModeAction, &QAction::toggled, this, &MainWindow::chipModeSet );
+
     reloadAction = new QAction( tr( action::reloadText ), this );
     signalMux_.connect( reloadAction, SIGNAL( triggered() ), SLOT( reload() ) );
 
@@ -791,6 +797,7 @@ void MainWindow::createMenus()
     viewMenu->addAction( lineNumbersVisibleInFilteredAction );
     viewMenu->addSeparator();
     viewMenu->addAction( textWrapAction );
+    viewMenu->addAction( chipModeAction );
     viewMenu->addSeparator();
     viewMenu->addAction( followAction );
     viewMenu->addSeparator();

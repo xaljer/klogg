@@ -361,13 +361,14 @@ if(KLOGG_USE_SENTRY)
      CACHE INTERNAL "" FORCE
   )
 
+  # sentry-native 0.13.2
   cpmaddpackage(
     NAME
     sentry
     GITHUB_REPOSITORY
     getsentry/sentry-native
     GIT_TAG
-    a3d58622a807b9dda174cb9fc18fa0f98c89d043
+    45e4a1d3f8078043eb23e3d695689a1a1fa24020
     EXCLUDE_FROM_ALL
     YES
   )

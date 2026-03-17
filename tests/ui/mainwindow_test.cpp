@@ -22,6 +22,7 @@
 #include <QSignalSpy>
 #include <QTemporaryFile>
 #include <QTest>
+#include <QEventLoop>
 
 #include <QToolBar>
 
@@ -39,22 +40,22 @@ SCENARIO( "Main window tests", "[ui]" )
     std::unique_ptr<MainWindow> mainWindow;
     std::unique_ptr<SafeQSignalSpy> activateSpy;
     std::unique_ptr<SafeQSignalSpy> exitSpy;
-    QTimer::singleShot( 0, [&] {
-        LOG_INFO << "Initialize main window";
-        mainWindow.reset( new MainWindow( windowSession ) );
-        exitSpy.reset( new SafeQSignalSpy( mainWindow.get(), SIGNAL( exitRequested() ) ) );
-        activateSpy.reset( new SafeQSignalSpy( mainWindow.get(), SIGNAL( windowActivated() ) ) );
-    } );
+    LOG_INFO << "Initialize main window";
+    mainWindow.reset( new MainWindow( windowSession ) );
+    exitSpy.reset( new SafeQSignalSpy( mainWindow.get(), SIGNAL( exitRequested() ) ) );
+    activateSpy.reset( new SafeQSignalSpy( mainWindow.get(), SIGNAL( windowActivated() ) ) );
 
-    QTest::qWait( 100 );
     mainWindow->show();
     QTest::qWait( 100 );
     REQUIRE( activateSpy->safeWait() );
 
     auto runInUiThread = [uiObject = mainWindow.get()]( auto&& func ) {
-        QTimer::singleShot( 0, Qt::VeryCoarseTimer, uiObject,
-                            std::forward<decltype( func )>( func ) );
-        QTest::qWait( 100 );
+        QEventLoop loop;
+        QTimer::singleShot( 0, uiObject, [ action = std::forward<decltype( func )>( func ), &loop ]() mutable {
+            action();
+            loop.quit();
+        } );
+        loop.exec();
     };
 
     GIVEN( "Opened main window" )

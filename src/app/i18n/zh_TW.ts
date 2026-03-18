@@ -288,6 +288,11 @@
         <source>Detected as %1</source>
         <translation>偵測為 %1</translation>
     </message>
+    <message>
+        <location filename="../../ui/src/crawlerwidget.cpp" line="1141"/>
+        <source>Enter search pattern...</source>
+        <translation>輸入搜尋條件...</translation>
+    </message>
 </context>
 <context>
     <name>HighlighterEdit</name>
@@ -680,6 +685,16 @@
         <location filename="../../ui/src/mainwindow.cpp" line="2071"/>
         <source>Remove from favorites</source>
         <translation>從書籤中移除</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindow.cpp" line="577"/>
+        <source>Chip Input Mode</source>
+        <translation>標籤模式</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindow.cpp" line="579"/>
+        <source>Toggle chip input mode for search patterns</source>
+        <translation>切換標籤輸入模式</translation>
     </message>
 </context>
 <context>

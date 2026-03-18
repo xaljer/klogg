@@ -103,6 +103,29 @@ void PatternInputWidget::setText( const QString& text )
     }
 }
 
+void PatternInputWidget::setPatterns( const QStringList& patterns )
+{
+    if ( isChipMode_ ) {
+        patterns_ = patterns;
+        updateChips();
+        lineEdit_->clear();
+        scrollToEnd();
+    }
+    else {
+        lineEdit_->setText( patterns.join( isRegexMode_ ? QLatin1String( "|" )
+                                                         : QStringLiteral( " or " ) ) );
+    }
+}
+
+QStringList PatternInputWidget::patterns() const
+{
+    if ( isChipMode_ ) {
+        return patterns_;
+    }
+
+    return lineEdit_->text().isEmpty() ? QStringList{} : QStringList{ lineEdit_->text() };
+}
+
 void PatternInputWidget::setPlaceholderText( const QString& placeholder )
 {
     lineEdit_->setPlaceholderText( placeholder );
@@ -111,6 +134,11 @@ void PatternInputWidget::setPlaceholderText( const QString& placeholder )
 QString PatternInputWidget::placeholderText() const
 {
     return lineEdit_->placeholderText();
+}
+
+void PatternInputWidget::focusInput( Qt::FocusReason reason )
+{
+    lineEdit_->setFocus( reason );
 }
 
 void PatternInputWidget::setRegexMode( bool isRegex )

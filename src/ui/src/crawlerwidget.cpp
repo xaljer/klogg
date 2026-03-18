@@ -289,7 +289,12 @@ void CrawlerWidget::setEncoding( std::optional<int> mib )
 
 void CrawlerWidget::focusSearchEdit()
 {
-    searchLineEdit_->setFocus( Qt::ShortcutFocusReason );
+    if ( patternInputWidget_->isChipMode() ) {
+        patternInputWidget_->focusInput( Qt::ShortcutFocusReason );
+    }
+    else {
+        searchLineEdit_->setFocus( Qt::ShortcutFocusReason );
+    }
 }
 
 void CrawlerWidget::goToLine()
@@ -844,9 +849,31 @@ void CrawlerWidget::changeFilteredViewVisibility( int index )
 void CrawlerWidget::setSearchPatternFromPredefinedFilters( const QList<PredefinedFilter>& filters )
 {
     QString searchPattern;
+    QStringList chipPatterns;
+    chipPatterns.reserve( filters.size() );
+
     for ( const auto& filter : filters ) {
-        combinePatterns( searchPattern, escapeSearchPattern( filter.pattern, filter.useRegex ) );
+        const auto escapedPattern = escapeSearchPattern( filter.pattern, filter.useRegex );
+        combinePatterns( searchPattern, escapedPattern );
+        const auto chipPattern = useRegexpButton_->isChecked() && !filter.useRegex
+                                     ? QRegularExpression::escape( filter.pattern )
+                                     : filter.pattern;
+        chipPatterns.append( chipPattern );
     }
+
+    if ( patternInputWidget_->isChipMode() ) {
+        searchLineEdit_->setEditText( searchPattern );
+        patternInputWidget_->setPatterns( chipPatterns );
+        updatePredefinedFiltersWidget();
+        focusSearchEdit();
+
+        if ( Configuration::get().autoRunSearchOnPatternChange() ) {
+            dispatchToMainThread( [ this ] { startNewSearch(); } );
+        }
+
+        return;
+    }
+
     setSearchPattern( searchPattern );
 }
 
@@ -917,8 +944,8 @@ void CrawlerWidget::setSearchPattern( const QString& searchPattern )
     searchLineEdit_->setEditText( searchPattern );
     patternInputWidget_->setText( searchPattern );
     updatePredefinedFiltersWidget();
-    // Set the focus to lineEdit so that the user can press 'Return' immediately
-    searchLineEdit_->lineEdit()->setFocus();
+    // Set the focus to the visible search input so that the user can press 'Return' immediately
+    focusSearchEdit();
 
     if ( Configuration::get().autoRunSearchOnPatternChange() ) {
         dispatchToMainThread( [ this ] { startNewSearch(); } );
@@ -928,6 +955,20 @@ void CrawlerWidget::setSearchPattern( const QString& searchPattern )
 QString CrawlerWidget::getCurrentSearchText() const
 {
     if ( patternInputWidget_->isChipMode() ) {
+        const auto patterns = patternInputWidget_->patterns();
+
+        if ( !useRegexpButton_->isChecked() && patterns.size() > 1 ) {
+            QString combinedPattern;
+            for ( const auto& pattern : patterns ) {
+                if ( !combinedPattern.isEmpty() ) {
+                    combinedPattern.append( QStringLiteral( " or " ) );
+                }
+                combinedPattern.append( escapeSearchPattern( pattern ) );
+            }
+
+            return combinedPattern;
+        }
+
         return patternInputWidget_->text();
     }
     return searchLineEdit_->currentText();
@@ -1647,11 +1688,16 @@ void CrawlerWidget::replaceCurrentSearch( const QString& searchText )
     overview_.updateData( logData_->getNbLine() );
 
     if ( !searchText.isEmpty() ) {
+        const auto chipPatterns = patternInputWidget_->patterns();
+        const auto shouldUseBooleanCombining
+            = booleanButton_->isChecked()
+              || ( patternInputWidget_->isChipMode() && !useRegexpButton_->isChecked()
+                   && chipPatterns.size() > 1 );
 
         // Constructs the regexp
         auto regexpPattern = RegularExpressionPattern(
             searchText, matchCaseButton_->isChecked(), inverseButton_->isChecked(),
-            booleanButton_->isChecked(), !useRegexpButton_->isChecked() );
+            shouldUseBooleanCombining, !useRegexpButton_->isChecked() );
 
         RegularExpression hsExpression{ regexpPattern };
         auto isValidExpression = hsExpression.isValid();

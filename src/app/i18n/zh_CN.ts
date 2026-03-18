@@ -291,7 +291,7 @@
     <message>
         <location filename="../../ui/src/crawlerwidget.cpp" line="1122"/>
         <source>Enter search pattern...</source>
-        <translation>输入搜索模式...</translation>
+        <translation>输入搜索条件...</translation>
     </message>
 </context>
 <context>
@@ -689,12 +689,12 @@
     <message>
         <location filename="../../ui/src/mainwindow.cpp" line="577"/>
         <source>Chip Input Mode</source>
-        <translation>标签输入模式</translation>
+        <translation>标签模式</translation>
     </message>
     <message>
         <location filename="../../ui/src/mainwindow.cpp" line="579"/>
         <source>Toggle chip input mode for search patterns</source>
-        <translation>切换搜索模式的标签输入模式</translation>
+        <translation>切换标签输入模式</translation>
     </message>
 </context>
 <context>

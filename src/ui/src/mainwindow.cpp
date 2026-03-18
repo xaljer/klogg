@@ -1912,6 +1912,9 @@ void MainWindow::updateMenuBarFromDocument( const CrawlerWidget* crawler )
 
     followAction->setChecked( crawler->isFollowEnabled() );
     textWrapAction->setChecked( crawler->isTextWrapEnabled() );
+    chipModeAction->blockSignals( true );
+    chipModeAction->setChecked( crawler->isChipMode() );
+    chipModeAction->blockSignals( false );
 }
 
 // Update the top info line from the session

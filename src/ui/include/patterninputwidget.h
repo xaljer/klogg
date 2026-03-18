@@ -40,9 +40,13 @@ class PatternInputWidget : public QWidget {
 
     QString text() const;
     void setText( const QString& text );
+    void setPatterns( const QStringList& patterns );
+    QStringList patterns() const;
 
     void setPlaceholderText( const QString& placeholder );
     QString placeholderText() const;
+
+    void focusInput( Qt::FocusReason reason = Qt::OtherFocusReason );
 
     void setRegexMode( bool isRegex );
     bool isRegexMode() const;

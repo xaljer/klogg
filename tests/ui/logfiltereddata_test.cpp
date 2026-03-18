@@ -57,14 +57,17 @@ bool generateDataFiles( QTemporaryFile& file )
 void runSearch( LogFilteredData* filtered_data, const QString& regexp,
                 SafeQSignalSpy& searchProgressSpy )
 {
-
-    QTimer::singleShot(
-        50, filtered_data, [ & ]() { filtered_data->runSearch( RegularExpressionPattern( regexp ) ); } );
+    filtered_data->runSearch( RegularExpressionPattern( regexp ) );
 
     int progress = 0;
     do {
-        REQUIRE( searchProgressSpy.wait() );
-        QList<QVariant> progressArgs = searchProgressSpy.last();
+        const bool ok = searchProgressSpy.safeWait();
+        if ( !ok ) {
+            filtered_data->interruptSearch();
+        }
+        REQUIRE( ok );
+
+        const QList<QVariant> progressArgs = searchProgressSpy.last();
         progress = progressArgs.at( 1 ).toInt();
     } while ( progress < 100 );
 }

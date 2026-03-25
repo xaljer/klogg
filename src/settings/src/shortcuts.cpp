@@ -591,6 +591,13 @@ const ShortcutAction::ShortcutList& ShortcutAction::defaultShortcutList()
             },
         },
         {
+            LogViewAddColorLabel10,
+            {
+                QApplication::tr( "Highlight text with color 10" ),
+                QStringList{},
+            },
+        },
+        {
             LogViewAddNextColorLabel,
             {
                 QApplication::tr( "Highlight text with next color" ),

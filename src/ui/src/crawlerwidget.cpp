@@ -1616,12 +1616,12 @@ void CrawlerWidget::registerShortcuts()
                                           }
                                       } );
 
-    std::array<std::string, 9> colorLables = {
+    std::array<std::string, 10> colorLables = {
         ShortcutAction::LogViewAddColorLabel1, ShortcutAction::LogViewAddColorLabel2,
         ShortcutAction::LogViewAddColorLabel3, ShortcutAction::LogViewAddColorLabel4,
         ShortcutAction::LogViewAddColorLabel5, ShortcutAction::LogViewAddColorLabel6,
         ShortcutAction::LogViewAddColorLabel7, ShortcutAction::LogViewAddColorLabel8,
-        ShortcutAction::LogViewAddColorLabel9,
+        ShortcutAction::LogViewAddColorLabel9, ShortcutAction::LogViewAddColorLabel10,
     };
 
     for ( auto label = 0u; label < colorLables.size(); ++label ) {

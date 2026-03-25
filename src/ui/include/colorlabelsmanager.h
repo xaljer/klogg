@@ -41,7 +41,7 @@ class ColorLabelsManager {
     QuickHighlightersCollection updateColorLabel( size_t label, const QString& text,
                                                   bool replaceCurrent );
 
-    QuickHighlightersCollection quickHighlighters_ = QuickHighlightersCollection{9};
+    QuickHighlightersCollection quickHighlighters_ = QuickHighlightersCollection{10};
     std::optional<size_t> currentLabel_;
 };
 

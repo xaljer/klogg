@@ -616,7 +616,12 @@ void HighlighterSetCollection::retrieveFromStorage( QSettings& settings )
     defaultLabels.append( { QApplication::tr( "Color label 8" ),
                             { QColor{ "#120080" }, QColor{ "#a29ccf" } },
                             true } );
-    defaultLabels.append( { QApplication::tr( "Color label 9" ), { QColor{}, Qt::gray }, true } );
+    defaultLabels.append( { QApplication::tr( "Color label 9" ),
+                            { QColor{ "#b14b28" }, QColor{ "#ffd6b0" } },
+                            true } );
+    defaultLabels.append( { QApplication::tr( "Color label 10" ),
+                            { QColor{ "#c21f30" }, QColor{ "#ffbeba" } },
+                            true } );
 
     if ( quickHighlighters_.size() < defaultLabels.size() ) {
         LOG_WARNING << "Got " << quickHighlighters_.size() << " quick highlighters";

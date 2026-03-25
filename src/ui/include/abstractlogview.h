@@ -358,7 +358,7 @@ class AbstractLogView : public QAbstractScrollArea, public SearchableWidgetInter
     Selection selection_;
     RegularExpressionPattern searchPattern_;
 
-    std::vector<QuickHighlighters> quickHighlighters_ = std::vector<QuickHighlighters>{ 9 };
+    std::vector<QuickHighlighters> quickHighlighters_ = std::vector<QuickHighlighters>{ 10 };
 
     // Position of the view, those are crucial to control drawing
     // firstLine gives the position of the view,

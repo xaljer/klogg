@@ -243,9 +243,10 @@ void CrawlerWidget::doSendAllStateSignals()
 
 void CrawlerWidget::changeEvent( QEvent* event )
 {
-    if ( event->type() == QEvent::StyleChange ) {
+    if ( event->type() == QEvent::StyleChange || event->type() == QEvent::PaletteChange ) {
         dispatchToMainThread( [ this ] {
             loadIcons();
+            applyToggleButtonPaletteStyle();
             searchInfoLineDefaultPalette_ = this->palette();
         } );
     }
@@ -1255,6 +1256,8 @@ void CrawlerWidget::setup()
     // Default splitter position (usually overridden by the config file)
     setSizes( config.splitterSizes() );
 
+    applyToggleButtonPaletteStyle();
+
     registerShortcuts();
     loadIcons();
 
@@ -1644,15 +1647,64 @@ void CrawlerWidget::registerShortcuts()
 
 void CrawlerWidget::loadIcons()
 {
-    searchRefreshButton_->setIcon( iconLoader_.load( "icons8-search-refresh" ) );
-    useRegexpButton_->setIcon( iconLoader_.load( "regex" ) );
-    inverseButton_->setIcon( iconLoader_.load( "icons8-not-equal" ) );
-    booleanButton_->setIcon( iconLoader_.load( "icons8-venn-diagram" ) );
+    const auto& config = Configuration::get();
+    const auto palette = config.themePalette( config.theme() );
+    auto checkedColor = palette.count( "ToggleCheckedText" ) > 0
+                            ? QColor( palette.at( "ToggleCheckedText" ) )
+                            : QColor();
+    if ( !checkedColor.isValid() && palette.count( "HighlightedText" ) > 0 ) {
+        checkedColor = QColor( palette.at( "HighlightedText" ) );
+    }
+
+    searchRefreshButton_->setIcon( iconLoader_.loadChecked( "icons8-search-refresh", checkedColor ) );
+    useRegexpButton_->setIcon( iconLoader_.loadChecked( "regex", checkedColor ) );
+    inverseButton_->setIcon( iconLoader_.loadChecked( "icons8-not-equal", checkedColor ) );
+    booleanButton_->setIcon( iconLoader_.loadChecked( "icons8-venn-diagram", checkedColor ) );
     clearButton_->setIcon( iconLoader_.load( "icons8-delete" ) );
     searchButton_->setIcon( iconLoader_.load( "icons8-search" ) );
     keepSearchResultsButton_->setIcon( iconLoader_.load( "icons8-lock" ) );
-    matchCaseButton_->setIcon( iconLoader_.load( "icons8-font-size" ) );
+    matchCaseButton_->setIcon( iconLoader_.loadChecked( "icons8-font-size", checkedColor ) );
     stopButton_->setIcon( iconLoader_.load( "icons8-close-window" ) );
+}
+
+void CrawlerWidget::applyToggleButtonPaletteStyle()
+{
+    const auto& config = Configuration::get();
+    const auto palette = config.themePalette( config.theme() );
+    auto checkedColor = palette.count( "ToggleCheckedText" ) > 0
+                            ? QColor( palette.at( "ToggleCheckedText" ) )
+                            : QColor();
+    if ( !checkedColor.isValid() ) {
+        checkedColor = palette.count( "HighlightedText" ) > 0
+                           ? QColor( palette.at( "HighlightedText" ) )
+                           : qApp->palette().color( QPalette::HighlightedText );
+    }
+    if ( !checkedColor.isValid() ) {
+        checkedColor = QColor( "#ffffff" );
+    }
+
+    auto checkedBackground = palette.count( "ToggleCheckedBackground" ) > 0
+                                 ? QColor( palette.at( "ToggleCheckedBackground" ) )
+                                 : QColor();
+    if ( !checkedBackground.isValid() ) {
+        checkedBackground = palette.count( "Highlight" ) > 0
+                                ? QColor( palette.at( "Highlight" ) )
+                                : qApp->palette().color( QPalette::Highlight );
+    }
+    if ( !checkedBackground.isValid() ) {
+        checkedBackground = QColor( "#3e4451" );
+    }
+
+    const auto style = QString( "QToolButton:checked { color: %1; background-color: %2; }" )
+                           .arg( checkedColor.name( QColor::HexArgb ) )
+                           .arg( checkedBackground.name( QColor::HexArgb ) );
+
+    for ( auto* button : { matchCaseButton_, useRegexpButton_, inverseButton_, booleanButton_,
+                           searchRefreshButton_ } ) {
+        if ( button != nullptr ) {
+            button->setStyleSheet( style );
+        }
+    }
 }
 
 // Create a new search using the text passed, replace the currently

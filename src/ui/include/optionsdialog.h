@@ -45,6 +45,8 @@
 #include <QKeySequenceEdit>
 #include <QLabel>
 #include <QPushButton>
+#include <QComboBox>
+#include <map>
 
 #include "configuration.h"
 
@@ -89,7 +91,11 @@ class OptionsDialog : public QDialog, public Ui::OptionsDialog {
     void onButtonBoxClicked( QAbstractButton* button );
 
     void changeMainColor();
+    void changeMainForeColor();
     void changeQfColor();
+    void changeDarkPaletteColor();
+    void resetCurrentThemePalette();
+    void createThemeFromCurrent();
 
     void checkShortcutsOnDuplicate() const;
 
@@ -101,9 +107,14 @@ class OptionsDialog : public QDialog, public Ui::OptionsDialog {
     void setupSearchResultsCache();
     void setupLogging();
     void setupArchives();
-    void setupStyles();
     void setupEncodings();
     void setupLanguageList();
+    void setupColorsTab();
+    void refreshThemeSelector();
+    void applyThemePaletteToButtons( const QString& themeName );
+    void applySearchColorsFromTheme( const QString& themeName );
+    QString displayThemeName( const QString& themeName ) const;
+    QString currentSelectedThemeFromCombo() const;
 
     int updateTranslate();
 
@@ -118,7 +129,15 @@ class OptionsDialog : public QDialog, public Ui::OptionsDialog {
     void updateDialogFromConfig();
 
     QColor mainSearchColor_;
+    QColor mainSearchForeColor_;
     QColor qfSearchColor_;
+    QString selectedThemeName_;
+    std::map<QString, std::map<QString, QString>> themePaletteColors_;
+    std::map<QString, std::map<QString, QString>> defaultThemePaletteColors_;
+    std::map<QString, QPushButton*> darkPaletteButtons_;
+    QComboBox* themeComboBox_ = nullptr;
+    QPushButton* resetThemeButton_ = nullptr;
+    QPushButton* cloneThemeButton_ = nullptr;
 };
 
 #endif

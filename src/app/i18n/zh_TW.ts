@@ -822,7 +822,222 @@
     <message>
         <location filename="../../ui/include/optionsdialog.ui" line="309"/>
         <source>Style</source>
-        <translation>主題</translation>
+        <translation>風格</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="205"/>
+        <source>Theme palette colors</source>
+        <translation>主題調色盤顏色</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="208"/>
+        <source>Theme:</source>
+        <translation>主題:</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="210"/>
+        <source>Theme controls colors.</source>
+        <translation>主題控制顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="303"/>
+        <source>Colors &amp; Themes</source>
+        <translation>顏色與主題</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="228"/>
+        <source>Window background</source>
+        <translation>視窗背景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="229"/>
+        <source>Dialogs and panel backgrounds (for example, Preferences window).</source>
+        <translation>對話框與面板背景（例如偏好設定視窗）。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="230"/>
+        <source>Window text</source>
+        <translation>視窗文字</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="230"/>
+        <source>Text shown on window/panel backgrounds.</source>
+        <translation>顯示在視窗/面板背景上的文字。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="231"/>
+        <source>Content background</source>
+        <translation>內容背景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="232"/>
+        <source>Editable/input content areas, such as text inputs and list content.</source>
+        <translation>可編輯/輸入內容區域，例如文字輸入框與清單內容區。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="233"/>
+        <source>Secondary content background</source>
+        <translation>次級內容背景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="234"/>
+        <source>Alternate rows/side areas and secondary content backgrounds.</source>
+        <translation>交錯列/側邊區域與次級內容背景。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="235"/>
+        <source>Button background</source>
+        <translation>按鈕背景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="235"/>
+        <source>Button face/background color.</source>
+        <translation>按鈕表面/背景顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="236"/>
+        <source>Button foreground</source>
+        <translation>按鈕前景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="236"/>
+        <source>Foreground color on buttons.</source>
+        <translation>按鈕上的前景顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="239"/>
+        <source>Toggle checked foreground</source>
+        <translation>開關選取前景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="239"/>
+        <source>Foreground color (text/icon) for checked toggle buttons.</source>
+        <translation>選取狀態開關按鈕的前景顏色（文字/圖示）。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="240"/>
+        <source>Toggle checked background</source>
+        <translation>開關選取背景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="240"/>
+        <source>Background color for checked toggle buttons.</source>
+        <translation>選取狀態開關按鈕的背景顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="237"/>
+        <source>Primary text</source>
+        <translation>主要文字</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="237"/>
+        <source>Main readable text in content areas.</source>
+        <translation>內容區域中的主要可讀文字。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="238"/>
+        <source>Selection background</source>
+        <translation>選取背景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="238"/>
+        <source>Selected item/text background.</source>
+        <translation>選取項目/文字的背景。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="243"/>
+        <source>Selection text</source>
+        <translation>選取文字</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="243"/>
+        <source>Text color on selected background.</source>
+        <translation>選取背景上的文字顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="240"/>
+        <source>Hyperlink color.</source>
+        <translation>超連結顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="241"/>
+        <source>Tooltip background</source>
+        <translation>工具提示背景</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="241"/>
+        <source>Tooltip popup background.</source>
+        <translation>工具提示彈出背景。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="242"/>
+        <source>Tooltip text</source>
+        <translation>工具提示文字</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="242"/>
+        <source>Tooltip text color.</source>
+        <translation>工具提示文字顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="243"/>
+        <source>Separator</source>
+        <translation>分隔線</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="243"/>
+        <source>Medium separators and subtle borders.</source>
+        <translation>中等分隔線與細微邊框。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="244"/>
+        <source>Strong separator</source>
+        <translation>強分隔線</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="244"/>
+        <source>Darker separators and outlines.</source>
+        <translation>更深色分隔線與外框。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="245"/>
+        <source>Strongest border/shadow color.</source>
+        <translation>最強邊框/陰影顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="246"/>
+        <source>Disabled button text</source>
+        <translation>停用按鈕文字</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="247"/>
+        <source>Text color for disabled buttons.</source>
+        <translation>停用按鈕的文字顏色。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="248"/>
+        <source>Disabled window text</source>
+        <translation>停用視窗文字</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="249"/>
+        <source>Disabled text shown on window/panel background.</source>
+        <translation>顯示在視窗/面板背景上的停用文字。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="250"/>
+        <source>Disabled text in content areas.</source>
+        <translation>內容區域中的停用文字。</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="251"/>
+        <source>Disabled light</source>
+        <translation>停用高亮</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="251"/>
+        <source>Disabled highlight/light accent.</source>
+        <translation>停用狀態高亮/淺色強調。</translation>
     </message>
     <message>
         <location filename="../../ui/include/optionsdialog.ui" line="323"/>
@@ -1078,6 +1293,114 @@
         <location filename="../../ui/src/optionsdialog.cpp" line="690"/>
         <source>Secondary shortcut</source>
         <translation>次要快捷鍵</translation>
+    </message>
+    <message>
+        <source>Reset to default</source>
+        <translation>還原預設</translation>
+    </message>
+    <message>
+        <source>Create from current</source>
+        <translation>以目前主題建立</translation>
+    </message>
+    <message>
+        <source>Create theme</source>
+        <translation>建立主題</translation>
+    </message>
+    <message>
+        <source>Theme name:</source>
+        <translation>主題名稱：</translation>
+    </message>
+    <message>
+        <source>Theme already exists.</source>
+        <translation>主題已存在。</translation>
+    </message>
+    <message>
+        <source>Theme name conflicts with reserved style/theme names.</source>
+        <translation>主題名稱與保留的樣式/主題名稱衝突。</translation>
+    </message>
+    <message>
+        <source>Matches overview accent</source>
+        <translation>匹配總覽強調色</translation>
+    </message>
+    <message>
+        <source>Color for matches markers in overview and match bullets.</source>
+        <translation>總覽匹配標記與匹配圓點使用的顏色。</translation>
+    </message>
+    <message>
+        <source>Line number text</source>
+        <translation>行號文字</translation>
+    </message>
+    <message>
+        <source>Text color of line numbers in log views.</source>
+        <translation>日誌檢視中行號文字的顏色。</translation>
+    </message>
+    <message>
+        <source>General UI</source>
+        <translation>一般介面</translation>
+    </message>
+    <message>
+        <source>Buttons</source>
+        <translation>按鈕</translation>
+    </message>
+    <message>
+        <source>Text and selection</source>
+        <translation>文字與選取</translation>
+    </message>
+    <message>
+        <source>Tooltips</source>
+        <translation>工具提示</translation>
+    </message>
+    <message>
+        <source>Borders and separators</source>
+        <translation>邊框與分隔線</translation>
+    </message>
+    <message>
+        <source>Disabled state</source>
+        <translation>停用狀態</translation>
+    </message>
+    <message>
+        <source>Light</source>
+        <translation>淺色</translation>
+    </message>
+    <message>
+        <source>Spring</source>
+        <translation>春日</translation>
+    </message>
+    <message>
+        <source>Dark</source>
+        <translation>深色</translation>
+    </message>
+    <message>
+        <source>Nord</source>
+        <translation>北國</translation>
+    </message>
+    <message>
+        <source>Nord Light</source>
+        <translation>北國淺色</translation>
+    </message>
+    <message>
+        <source>Search highlights</source>
+        <translation>搜尋高亮</translation>
+    </message>
+    <message>
+        <source>Main search highlight</source>
+        <translation>主要搜尋高亮</translation>
+    </message>
+    <message>
+        <source>Background color for highlighted main search matches.</source>
+        <translation>主要搜尋匹配高亮的背景色。</translation>
+    </message>
+    <message>
+        <source>QuickFind highlight</source>
+        <translation>QuickFind 高亮</translation>
+    </message>
+    <message>
+        <source>Background color for QuickFind matches.</source>
+        <translation>QuickFind 匹配高亮的背景色。</translation>
+    </message>
+    <message>
+        <source>Managed by current theme in Colors &amp; Themes.</source>
+        <translation>由「顏色與主題」中的目前主題統一管理。</translation>
     </message>
 </context>
 <context>

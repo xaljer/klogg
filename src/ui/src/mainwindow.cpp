@@ -742,6 +742,44 @@ void MainWindow::loadIcons()
     showScratchPadAction->setIcon( iconLoader_.load( "icons8-create" ) );
     addToFavoritesAction->setIcon( iconLoader_.load( "icons8-star" ) );
     addToFavoritesMenuAction->setIcon( iconLoader_.load( "icons8-star" ) );
+
+    const auto& config = Configuration::get();
+    const auto palette = config.themePalette( config.theme() );
+    auto checkedColor = palette.count( "ToggleCheckedText" ) > 0
+                            ? QColor( palette.at( "ToggleCheckedText" ) )
+                            : QColor();
+    if ( !checkedColor.isValid() ) {
+        checkedColor = palette.count( "HighlightedText" ) > 0
+                           ? QColor( palette.at( "HighlightedText" ) )
+                           : qApp->palette().color( QPalette::HighlightedText );
+    }
+    if ( !checkedColor.isValid() ) {
+        checkedColor = QColor( "#ffffff" );
+    }
+
+    auto checkedBackground = palette.count( "ToggleCheckedBackground" ) > 0
+                                 ? QColor( palette.at( "ToggleCheckedBackground" ) )
+                                 : QColor();
+    if ( !checkedBackground.isValid() ) {
+        checkedBackground = palette.count( "Highlight" ) > 0
+                                ? QColor( palette.at( "Highlight" ) )
+                                : qApp->palette().color( QPalette::Highlight );
+    }
+    if ( !checkedBackground.isValid() ) {
+        checkedBackground = QColor( "#3e4451" );
+    }
+
+    const auto toolbarCheckedStyle
+        = QString( "QToolButton:checked { color: %1; background-color: %2; }" )
+              .arg( checkedColor.name( QColor::HexArgb ) )
+              .arg( checkedBackground.name( QColor::HexArgb ) );
+
+    const auto toolbarButtons = toolBar->findChildren<QToolButton*>();
+    for ( auto* button : toolbarButtons ) {
+        if ( button != nullptr ) {
+            button->setStyleSheet( toolbarCheckedStyle );
+        }
+    }
 }
 
 void MainWindow::createMenus()
@@ -1584,7 +1622,7 @@ void MainWindow::changeEvent( QEvent* event )
             }
         }
     }
-    else if ( event->type() == QEvent::StyleChange ) {
+    else if ( event->type() == QEvent::StyleChange || event->type() == QEvent::PaletteChange ) {
         dispatchToMainThread( [ this ] {
             loadIcons();
             updateOpenedFilesMenu();

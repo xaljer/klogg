@@ -141,27 +141,51 @@ void Configuration::retrieveFromStorage( QSettings& settings )
                       DefaultConfiguration.enableMainSearchHighlightVariance_ )
               .toBool();
 
+    const auto mainSearchBackColorSetting
+        = settings
+              .value( "regexpType.mainBackColor",
+                      DefaultConfiguration.mainSearchBackColor_.name( QColor::HexArgb ) )
+              .toString();
+
     mainSearchBackColor_
 #if QT_VERSION <= QT_VERSION_CHECK( 6, 4, 0 )
         .setNamedColor(
 #else
-        .fromString(
+        = QColor::fromString(
+#endif
+            mainSearchBackColorSetting );
+
+    mainSearchForeColor_
+#if QT_VERSION <= QT_VERSION_CHECK( 6, 4, 0 )
+        .setNamedColor(
+#else
+        = QColor::fromString(
 #endif
             settings
-                .value( "regexpType.mainBackColor",
-                        DefaultConfiguration.mainSearchBackColor_.name( QColor::HexArgb ) )
+                .value( "regexpType.mainForeColor",
+                        DefaultConfiguration.mainSearchForeColor_.name( QColor::HexArgb ) )
                 .toString() );
+
+    const auto qfBackColorSetting = settings
+                                        .value( "regexpType.quickfindBackColor",
+                                                DefaultConfiguration.qfBackColor_.name( QColor::HexArgb ) )
+                                        .toString();
 
     qfBackColor_
 #if QT_VERSION <= QT_VERSION_CHECK( 6, 4, 0 )
         .setNamedColor(
 #else
-        .fromString(
+        = QColor::fromString(
 #endif
-            settings
-                .value( "regexpType.quickfindBackColor",
-                        DefaultConfiguration.qfBackColor_.name( QColor::HexArgb ) )
-                .toString() );
+            qfBackColorSetting );
+
+    // Migrate legacy default yellow quickfind color to new default Nord amber
+    const auto normalizedQfSetting = qfBackColorSetting.toLower();
+    if ( settings.contains( "regexpType.quickfindBackColor" )
+         && ( normalizedQfSetting == QString( "#ffff00" )
+              || normalizedQfSetting == QString( "#ffffff00" ) ) ) {
+        qfBackColor_ = QColor( "#ebcb8b" );
+    }
 
     qfIgnoreCase_
         = settings.value( "quickfind.ignore_case", DefaultConfiguration.qfIgnoreCase_ ).toBool();
@@ -281,15 +305,9 @@ void Configuration::retrieveFromStorage( QSettings& settings )
 
     useTextWrap_ = settings.value( "view.textWrap", DefaultConfiguration.useTextWrap() ).toBool();
 
-    style_ = settings.value( "view.style", DefaultConfiguration.style_ ).toString();
+    settings.remove( "view.style" );
 
-    auto styles = StyleManager::availableStyles();
-    if ( !styles.contains( style_ ) ) {
-        style_ = StyleManager::defaultPlatformStyle();
-    }
-    if ( !styles.contains( style_ ) ) {
-        style_ = styles.front();
-    }
+    theme_ = settings.value( "view.theme", DefaultConfiguration.theme_ ).toString();
 
     // DefaultConfiguration crawler settings
     searchAutoRefresh_
@@ -343,11 +361,75 @@ void Configuration::retrieveFromStorage( QSettings& settings )
     }
     settings.endArray();
 
-    settings.beginGroup( "dark" );
-    for ( auto& color : darkPalette_ ) {
-        color.second = settings.value( color.first, color.second ).toString();
+    for ( const auto& theme : ThemeManager::availableThemes() ) {
+        if ( themePalettes_.count( theme ) == 0 ) {
+            themePalettes_[ theme ] = ThemeManager::defaultThemePalette( theme );
+        }
     }
-    settings.endGroup();
+
+    const auto windowsDarkLegacyName = QString( "%1 Dark" ).arg( QString( "Windows" ) );
+    const auto isStyleLikeThemeName = [ &windowsDarkLegacyName ]( const QString& themeName ) {
+        static const QStringList legacyStyleNames = {
+            QString( ThemeManager::FusionKey ),
+            QString( "WindowsVista" ),
+            QString( "Windows" ),
+            QString( "macintosh" ),
+            QString( "Gtk2" ),
+            QString( "bb10" ),
+        };
+
+        return legacyStyleNames.contains( themeName ) || themeName == windowsDarkLegacyName;
+    };
+
+    for ( const auto& groupName : settings.childGroups() ) {
+        if ( !groupName.startsWith( "theme_" ) ) {
+            continue;
+        }
+
+        const auto encodedThemeName = groupName.mid( 6 );
+        const auto themeName = QString::fromUtf8( QByteArray::fromPercentEncoding(
+            encodedThemeName.toUtf8() ) );
+        if ( themeName.isEmpty() ) {
+            continue;
+        }
+
+        if ( themeName == QString( "OneDark" ) || themeName == QString( "Custom" ) ) {
+            continue;
+        }
+
+        if ( isStyleLikeThemeName( themeName ) ) {
+            continue;
+        }
+
+        if ( themePalettes_.count( themeName ) == 0 ) {
+            themePalettes_[ themeName ] = ThemeManager::defaultThemePalette( themeName );
+        }
+    }
+
+    for ( auto& [ themeName, palette ] : themePalettes_ ) {
+        const auto groupName = QString( "theme_%1" ).arg( themeName );
+        settings.beginGroup( groupName );
+        for ( auto& color : palette ) {
+            color.second = settings.value( color.first, color.second ).toString();
+        }
+        settings.endGroup();
+
+        if ( palette.count( "MainSearchBack" ) == 0 ) {
+            palette[ "MainSearchBack" ] = mainSearchBackColor_.name( QColor::HexArgb );
+        }
+        if ( palette.count( "QuickFindBack" ) == 0 ) {
+            palette[ "QuickFindBack" ] = qfBackColor_.name( QColor::HexArgb );
+        }
+
+    }
+
+    if ( theme_.isEmpty() || themePalettes_.count( theme_ ) == 0 ) {
+        theme_ = QString( ThemeManager::NordLightThemeKey );
+    }
+
+    if ( settings.childGroups().contains( "dark" ) ) {
+        settings.remove( "dark" );
+    }
 }
 
 void Configuration::saveToStorage( QSettings& settings ) const
@@ -364,13 +446,14 @@ void Configuration::saveToStorage( QSettings& settings ) const
     settings.setValue( "regexpType.engine", static_cast<int>( regexpEngine_ ) );
 
     settings.setValue( "regexpType.main", static_cast<int>( mainRegexpType_ ) );
-    settings.setValue( "regexpType.mainBackColor", mainSearchBackColor_.name( QColor::HexArgb ) );
+    settings.remove( "regexpType.mainBackColor" );
+    settings.setValue( "regexpType.mainForeColor", mainSearchForeColor_.name( QColor::HexArgb ) );
     settings.setValue( "regexpType.mainHighlight", enableMainSearchHighlight_ );
     settings.setValue( "regexpType.mainHighlightVariate", enableMainSearchHighlightVariance_ );
     settings.setValue( "regexpType.autoRunSearch", autoRunSearchOnPatternChange_ );
 
     settings.setValue( "regexpType.quickfind", static_cast<int>( quickfindRegexpType_ ) );
-    settings.setValue( "regexpType.quickfindBackColor", qfBackColor_.name( QColor::HexArgb ) );
+    settings.remove( "regexpType.quickfindBackColor" );
 
     settings.setValue( "quickfind.incremental", quickfindIncremental_ );
     settings.setValue( "quickfind.ignore_case", qfIgnoreCase_ );
@@ -409,7 +492,8 @@ void Configuration::saveToStorage( QSettings& settings ) const
     settings.setValue( "view.lineNumbersVisibleInMain", lineNumbersVisibleInMain_ );
     settings.setValue( "view.lineNumbersVisibleInFiltered", lineNumbersVisibleInFiltered_ );
     settings.setValue( "view.minimizeToTray", minimizeToTray_ );
-    settings.setValue( "view.style", style_ );
+    settings.remove( "view.style" );
+    settings.setValue( "view.theme", theme_ );
     settings.setValue( "view.language", language_ );
     settings.setValue( "view.textWrap", useTextWrap_ );
 
@@ -440,9 +524,14 @@ void Configuration::saveToStorage( QSettings& settings ) const
     }
     settings.endArray();
 
-    settings.beginGroup( "dark" );
-    for ( const auto& color : darkPalette_ ) {
-        settings.setValue( color.first, color.second );
+    for ( const auto& [ themeName, palette ] : themePalettes_ ) {
+        const auto groupName = QString( "theme_%1" ).arg( themeName );
+        settings.beginGroup( groupName );
+        for ( const auto& color : palette ) {
+            settings.setValue( color.first, color.second );
+        }
+        settings.endGroup();
     }
-    settings.endGroup();
+
+    settings.remove( "dark" );
 }

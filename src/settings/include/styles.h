@@ -22,23 +22,23 @@
 
 #include <QStringList>
 #include <QLatin1String>
+#include <map>
 
-struct StyleManager {
+struct ThemeManager {
 
-    static constexpr QLatin1String DarkStyleKey = QLatin1String( "Dark", 4 );
-    static constexpr QLatin1String DarkWindowsStyleKey = QLatin1String( "Windows Dark", 12 );
-    static constexpr QLatin1String VistaKey = QLatin1String( "WindowsVista", 12 );
     static constexpr QLatin1String FusionKey = QLatin1String( "Fusion", 6 );
-    static constexpr QLatin1String WindowsKey = QLatin1String( "Windows", 7 );
-    static constexpr QLatin1String MacintoshKey = QLatin1String( "macintosh", 9 );
 
-    static constexpr QLatin1String Gtk2Key = QLatin1String( "Gtk2", 4 );
-    static constexpr QLatin1String Bb10Key = QLatin1String( "bb10", 4 );
+    static constexpr QLatin1String LightThemeKey = QLatin1String( "Light", 5 );
+    static constexpr QLatin1String SpringThemeKey = QLatin1String( "Spring", 6 );
+    static constexpr QLatin1String DarkThemeKey = QLatin1String( "Dark", 4 );
+    static constexpr QLatin1String NordThemeKey = QLatin1String( "Nord", 4 );
+    static constexpr QLatin1String NordLightThemeKey = QLatin1String( "nord-light", 10 );
 
-    static QStringList availableStyles();
-    static QString defaultPlatformStyle();
+    static QStringList availableThemes();
+    static std::map<QString, QString> defaultThemePalette( const QString& theme );
 
-    static void applyStyle( const QString& style );
+    static void applyFrameworkStyle();
+    static void applyTheme( const QString& theme );
 };
 
 #endif

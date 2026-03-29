@@ -825,6 +825,221 @@
         <translation>Style</translation>
     </message>
     <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="205"/>
+        <source>Theme palette colors</source>
+        <translation>Theme palette colors</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="208"/>
+        <source>Theme:</source>
+        <translation>Theme:</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="210"/>
+        <source>Theme controls colors.</source>
+        <translation>Theme controls colors.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="303"/>
+        <source>Colors &amp; Themes</source>
+        <translation>Colors &amp; Themes</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="228"/>
+        <source>Window background</source>
+        <translation>Window background</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="229"/>
+        <source>Dialogs and panel backgrounds (for example, Preferences window).</source>
+        <translation>Dialogs and panel backgrounds (for example, Preferences window).</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="230"/>
+        <source>Window text</source>
+        <translation>Window text</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="230"/>
+        <source>Text shown on window/panel backgrounds.</source>
+        <translation>Text shown on window/panel backgrounds.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="231"/>
+        <source>Content background</source>
+        <translation>Content background</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="232"/>
+        <source>Editable/input content areas, such as text inputs and list content.</source>
+        <translation>Editable/input content areas, such as text inputs and list content.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="233"/>
+        <source>Secondary content background</source>
+        <translation>Secondary content background</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="234"/>
+        <source>Alternate rows/side areas and secondary content backgrounds.</source>
+        <translation>Alternate rows/side areas and secondary content backgrounds.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="235"/>
+        <source>Button background</source>
+        <translation>Button background</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="235"/>
+        <source>Button face/background color.</source>
+        <translation>Button face/background color.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="236"/>
+        <source>Button foreground</source>
+        <translation>Button foreground</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="236"/>
+        <source>Foreground color on buttons.</source>
+        <translation>Foreground color on buttons.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="239"/>
+        <source>Toggle checked foreground</source>
+        <translation>Toggle checked foreground</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="239"/>
+        <source>Foreground color (text/icon) for checked toggle buttons.</source>
+        <translation>Foreground color (text/icon) for checked toggle buttons.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="240"/>
+        <source>Toggle checked background</source>
+        <translation>Toggle checked background</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="240"/>
+        <source>Background color for checked toggle buttons.</source>
+        <translation>Background color for checked toggle buttons.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="237"/>
+        <source>Primary text</source>
+        <translation>Primary text</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="237"/>
+        <source>Main readable text in content areas.</source>
+        <translation>Main readable text in content areas.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="238"/>
+        <source>Selection background</source>
+        <translation>Selection background</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="238"/>
+        <source>Selected item/text background.</source>
+        <translation>Selected item/text background.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="243"/>
+        <source>Selection text</source>
+        <translation>Selection text</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="243"/>
+        <source>Text color on selected background.</source>
+        <translation>Text color on selected background.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="240"/>
+        <source>Hyperlink color.</source>
+        <translation>Hyperlink color.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="241"/>
+        <source>Tooltip background</source>
+        <translation>Tooltip background</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="241"/>
+        <source>Tooltip popup background.</source>
+        <translation>Tooltip popup background.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="242"/>
+        <source>Tooltip text</source>
+        <translation>Tooltip text</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="242"/>
+        <source>Tooltip text color.</source>
+        <translation>Tooltip text color.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="243"/>
+        <source>Separator</source>
+        <translation>Separator</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="243"/>
+        <source>Medium separators and subtle borders.</source>
+        <translation>Medium separators and subtle borders.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="244"/>
+        <source>Strong separator</source>
+        <translation>Strong separator</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="244"/>
+        <source>Darker separators and outlines.</source>
+        <translation>Darker separators and outlines.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="245"/>
+        <source>Strongest border/shadow color.</source>
+        <translation>Strongest border/shadow color.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="246"/>
+        <source>Disabled button text</source>
+        <translation>Disabled button text</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="247"/>
+        <source>Text color for disabled buttons.</source>
+        <translation>Text color for disabled buttons.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="248"/>
+        <source>Disabled window text</source>
+        <translation>Disabled window text</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="249"/>
+        <source>Disabled text shown on window/panel background.</source>
+        <translation>Disabled text shown on window/panel background.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="250"/>
+        <source>Disabled text in content areas.</source>
+        <translation>Disabled text in content areas.</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="251"/>
+        <source>Disabled light</source>
+        <translation>Disabled light</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/optionsdialog.cpp" line="251"/>
+        <source>Disabled highlight/light accent.</source>
+        <translation>Disabled highlight/light accent.</translation>
+    </message>
+    <message>
         <location filename="../../ui/include/optionsdialog.ui" line="323"/>
         <source>High DPI</source>
         <translation>High DPI</translation>
@@ -1078,6 +1293,114 @@
         <location filename="../../ui/src/optionsdialog.cpp" line="690"/>
         <source>Secondary shortcut</source>
         <translation>Secondary shortcut</translation>
+    </message>
+    <message>
+        <source>Reset to default</source>
+        <translation>Reset to default</translation>
+    </message>
+    <message>
+        <source>Create from current</source>
+        <translation>Create from current</translation>
+    </message>
+    <message>
+        <source>Create theme</source>
+        <translation>Create theme</translation>
+    </message>
+    <message>
+        <source>Theme name:</source>
+        <translation>Theme name:</translation>
+    </message>
+    <message>
+        <source>Theme already exists.</source>
+        <translation>Theme already exists.</translation>
+    </message>
+    <message>
+        <source>Theme name conflicts with reserved style/theme names.</source>
+        <translation>Theme name conflicts with reserved style/theme names.</translation>
+    </message>
+    <message>
+        <source>Matches overview accent</source>
+        <translation>Matches overview accent</translation>
+    </message>
+    <message>
+        <source>Color for matches markers in overview and match bullets.</source>
+        <translation>Color for matches markers in overview and match bullets.</translation>
+    </message>
+    <message>
+        <source>Line number text</source>
+        <translation>Line number text</translation>
+    </message>
+    <message>
+        <source>Text color of line numbers in log views.</source>
+        <translation>Text color of line numbers in log views.</translation>
+    </message>
+    <message>
+        <source>General UI</source>
+        <translation>General UI</translation>
+    </message>
+    <message>
+        <source>Buttons</source>
+        <translation>Buttons</translation>
+    </message>
+    <message>
+        <source>Text and selection</source>
+        <translation>Text and selection</translation>
+    </message>
+    <message>
+        <source>Tooltips</source>
+        <translation>Tooltips</translation>
+    </message>
+    <message>
+        <source>Borders and separators</source>
+        <translation>Borders and separators</translation>
+    </message>
+    <message>
+        <source>Disabled state</source>
+        <translation>Disabled state</translation>
+    </message>
+    <message>
+        <source>Light</source>
+        <translation>Light</translation>
+    </message>
+    <message>
+        <source>Spring</source>
+        <translation>Spring</translation>
+    </message>
+    <message>
+        <source>Dark</source>
+        <translation>Dark</translation>
+    </message>
+    <message>
+        <source>Nord</source>
+        <translation>Nord</translation>
+    </message>
+    <message>
+        <source>Nord Light</source>
+        <translation>Nord Light</translation>
+    </message>
+    <message>
+        <source>Search highlights</source>
+        <translation>Search highlights</translation>
+    </message>
+    <message>
+        <source>Main search highlight</source>
+        <translation>Main search highlight</translation>
+    </message>
+    <message>
+        <source>Background color for highlighted main search matches.</source>
+        <translation>Background color for highlighted main search matches.</translation>
+    </message>
+    <message>
+        <source>QuickFind highlight</source>
+        <translation>QuickFind highlight</translation>
+    </message>
+    <message>
+        <source>Background color for QuickFind matches.</source>
+        <translation>Background color for QuickFind matches.</translation>
+    </message>
+    <message>
+        <source>Managed by current theme in Colors &amp; Themes.</source>
+        <translation>Managed by current theme in Colors &amp; Themes.</translation>
     </message>
 </context>
 <context>

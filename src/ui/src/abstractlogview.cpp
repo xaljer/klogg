@@ -2218,10 +2218,21 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
     const QPalette& palette = viewport()->palette();
     const HighlighterSet& highlighterSet = HighlighterSetCollection::get().currentActiveSet();
     const auto& quickHighlighters = HighlighterSetCollection::get().quickHighlighters();
+    const auto gutterBackgroundColor = palette.color( QPalette::AlternateBase );
+    const auto separatorColor = palette.color( QPalette::Mid );
+    const auto themePalette = Configuration::get().themePalette( Configuration::get().theme() );
+    auto lineNumberColor = palette.color( QPalette::WindowText );
+    if ( themePalette.count( "LineNumberText" ) > 0 ) {
+        lineNumberColor = QColor( themePalette.at( "LineNumberText" ) );
+    }
+    auto matchAccentColor = QColor( Qt::red );
+    if ( themePalette.count( "MatchAccent" ) > 0 ) {
+        matchAccentColor = QColor( themePalette.at( "MatchAccent" ) );
+    }
     QColor foreColor, backColor;
 
     static const QBrush normalBulletBrush = QBrush( Qt::white );
-    static const QBrush matchBulletBrush = QBrush( Qt::red );
+    const auto matchBulletBrush = QBrush( matchAccentColor );
     static const QBrush markBrush = QBrush( "dodgerblue" );
     static const QBrush markedMatchBrush = QBrush( "violet" );
 
@@ -2249,8 +2260,8 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
                        palette.color( QPalette::Window ) );
 
     // First draw the bullet left margin
-    painter->setPen( palette.color( QPalette::Text ) );
-    painter->fillRect( 0, 0, BulletAreaWidth, paintDeviceHeight, Qt::darkGray );
+    painter->setPen( separatorColor );
+    painter->fillRect( 0, 0, BulletAreaWidth, paintDeviceHeight, gutterBackgroundColor );
 
     // Column at which the content should start (pixels)
     int contentStartPosX = BulletAreaWidth + SeparatorWidth;
@@ -2268,9 +2279,10 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
         const auto lineNumberAreaWidth = 2 * LineNumberPadding + lineNumberWidth;
         lineNumberAreaStartX = contentStartPosX;
 
-        painter->setPen( palette.color( QPalette::Text ) );
+        painter->setPen( separatorColor );
         painter->fillRect( contentStartPosX - SeparatorWidth, 0,
-                           lineNumberAreaWidth + SeparatorWidth, paintDeviceHeight, Qt::darkGray );
+                           lineNumberAreaWidth + SeparatorWidth, paintDeviceHeight,
+                           gutterBackgroundColor );
 
         painter->drawLine( contentStartPosX + lineNumberAreaWidth - SeparatorWidth, 0,
                            contentStartPosX + lineNumberAreaWidth - SeparatorWidth,
@@ -2281,10 +2293,11 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
     }
     else {
         painter->fillRect( contentStartPosX - SeparatorWidth, 0, SeparatorWidth + 1,
-                           paintDeviceHeight, palette.color( QPalette::Disabled, QPalette::Text ) );
+                           paintDeviceHeight, separatorColor );
         // contentStartPosX += SEPARATOR_WIDTH;
     }
 
+    painter->setPen( separatorColor );
     painter->drawLine( BulletAreaWidth, 0, BulletAreaWidth, paintDeviceHeight - 1 );
 
     // This is the total width of the 'margin' (including line number if any)
@@ -2313,6 +2326,7 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
     if ( highlightPatternMatches && !searchPattern_.isBoolean && !searchPattern_.isExclude
          && !searchPattern_.pattern.isEmpty() ) {
         const auto mainSearchBackColor = Configuration::get().mainSearchBackColor();
+        const auto mainSearchForeColor = Configuration::get().mainSearchForeColor();
         patternHighlight = Highlighter{};
         patternHighlight->setHighlightOnlyMatch( true );
         patternHighlight->setVariateColors( variateHighlightPatternMatches );
@@ -2321,7 +2335,7 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
         patternHighlight->setUseRegex( !searchPattern_.isPlainText );
 
         patternHighlight->setBackColor( mainSearchBackColor );
-        patternHighlight->setForeColor( Qt::black );
+        patternHighlight->setForeColor( mainSearchForeColor );
     }
 
     klogg::vector<Highlighter> additionalHighlighters;
@@ -2558,7 +2572,7 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
             static const QString lineNumberFormat( "%1" );
             const QString& lineNumberStr = lineNumberFormat.arg(
                 displayLineNumber( lineNumber ).get(), nbDigitsInLineNumber );
-            painter->setPen( Qt::white );
+            painter->setPen( lineNumberColor );
             painter->drawText( lineNumberAreaStartX + LineNumberPadding, yPos + fontAscent,
                                lineNumberStr );
         }

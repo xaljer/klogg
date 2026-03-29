@@ -48,6 +48,7 @@
 #include <string_view>
 
 #include "persistable.h"
+#include "styles.h"
 
 // Type of regexp to use for searches
 enum class SearchRegexpType {
@@ -281,10 +282,6 @@ class Configuration final : public Persistable<Configuration> {
     {
         return minimizeToTray_;
     }
-    QString style() const
-    {
-        return style_;
-    }
     void setMainLineNumbersVisible( bool lineNumbersVisible )
     {
         lineNumbersVisibleInMain_ = lineNumbersVisible;
@@ -297,9 +294,14 @@ class Configuration final : public Persistable<Configuration> {
     {
         minimizeToTray_ = minimizeToTray;
     }
-    void setStyle( const QString& style )
+    QString theme() const
     {
-        style_ = style;
+        return theme_;
+    }
+
+    void setTheme( const QString& theme )
+    {
+        theme_ = theme;
     }
 
     bool enableLogging() const
@@ -437,20 +439,57 @@ class Configuration final : public Persistable<Configuration> {
 
     QColor mainSearchBackColor() const
     {
+        const auto palette = themePalette( theme_ );
+        if ( const auto it = palette.find( "MainSearchBack" ); it != palette.end() ) {
+            const auto color = QColor( it->second );
+            if ( color.isValid() ) {
+                return color;
+            }
+        }
+
         return mainSearchBackColor_;
     }
     void setMainSearchBackColor( QColor color )
     {
         mainSearchBackColor_ = color;
+
+        const auto effectiveTheme
+            = theme_.isEmpty() ? QString( ThemeManager::NordLightThemeKey ) : theme_;
+        auto palette = themePalette( effectiveTheme );
+        palette[ "MainSearchBack" ] = color.name( QColor::HexArgb );
+        setThemePalette( effectiveTheme, palette );
+    }
+
+    QColor mainSearchForeColor() const
+    {
+        return mainSearchForeColor_;
+    }
+    void setMainSearchForeColor( QColor color )
+    {
+        mainSearchForeColor_ = color;
     }
 
     QColor qfBackColor() const
     {
+        const auto palette = themePalette( theme_ );
+        if ( const auto it = palette.find( "QuickFindBack" ); it != palette.end() ) {
+            const auto color = QColor( it->second );
+            if ( color.isValid() ) {
+                return color;
+            }
+        }
+
         return qfBackColor_;
     }
     void setQfBackColor( QColor color )
     {
         qfBackColor_ = color;
+
+        const auto effectiveTheme
+            = theme_.isEmpty() ? QString( ThemeManager::NordLightThemeKey ) : theme_;
+        auto palette = themePalette( effectiveTheme );
+        palette[ "QuickFindBack" ] = color.name( QColor::HexArgb );
+        setThemePalette( effectiveTheme, palette );
     }
 
     bool qfIgnoreCase() const
@@ -525,8 +564,46 @@ class Configuration final : public Persistable<Configuration> {
         defaultEncodingMib_ = mib;
     }
 
-    std::map<QString, QString> darkPalette() const {
-        return darkPalette_;
+    std::map<QString, QString> darkPalette() const
+    {
+        return themePalette( QString( ThemeManager::DarkThemeKey ) );
+    }
+    void setDarkPalette( const std::map<QString, QString>& palette )
+    {
+        setThemePalette( QString( ThemeManager::DarkThemeKey ), palette );
+    }
+
+    std::map<QString, QString> themePalette( const QString& theme ) const
+    {
+        auto palette = ThemeManager::defaultThemePalette( theme );
+
+        if ( const auto it = themePalettes_.find( theme ); it != themePalettes_.end() ) {
+            for ( const auto& [ key, value ] : it->second ) {
+                palette[ key ] = value;
+            }
+        }
+
+        return palette;
+    }
+
+    void setThemePalette( const QString& theme, const std::map<QString, QString>& palette )
+    {
+        themePalettes_[ theme ] = palette;
+    }
+
+    std::map<QString, std::map<QString, QString>> themePalettes() const
+    {
+        auto palettes = themePalettes_;
+        for ( const auto& [ themeName, palette ] : themePalettes_ ) {
+            Q_UNUSED( palette );
+            palettes[ themeName ] = themePalette( themeName );
+        }
+
+        for ( const auto& theme : ThemeManager::availableThemes() ) {
+            palettes[ theme ] = themePalette( theme );
+        }
+
+        return palettes;
     }
 
     // Reads/writes the current config in the QSettings object passed
@@ -562,7 +639,7 @@ class Configuration final : public Persistable<Configuration> {
     bool lineNumbersVisibleInMain_ = false;
     bool lineNumbersVisibleInFiltered_ = true;
     bool minimizeToTray_ = false;
-    QString style_;
+    QString theme_ = QString( ThemeManager::NordLightThemeKey );
 
     // Default settings for new views
     bool searchAutoRefresh_ = false;
@@ -598,8 +675,9 @@ class Configuration final : public Persistable<Configuration> {
 
     RegexpEngine regexpEngine_ = RegexpEngine::Hyperscan;
 
-    QColor qfBackColor_ = Qt::yellow;
+    QColor qfBackColor_ = QColor( "#ebcb8b" );
     QColor mainSearchBackColor_ = Qt::lightGray;
+    QColor mainSearchForeColor_ = Qt::black;
     bool enableMainSearchHighlight_ = false;
     bool enableMainSearchHighlightVariance_ = false;
 
@@ -618,26 +696,7 @@ class Configuration final : public Persistable<Configuration> {
 
     std::map<std::string, QStringList> shortcuts_;
 
-    // based on https://gist.github.com/QuantumCD/6245215
-    std::map<QString, QString> darkPalette_ = {
-        {"Window", "#353535"},
-        {"WindowText", "#FFFFFF"},
-        {"Base", "#282828"},
-        {"AlternateBase", "#353535"},
-        {"ToolTipBase", "#2a82da"},
-        {"ToolTipText", "#FFFFFF"},
-        {"Text", "#FFFFFF"},
-        {"Button", "#353535"},
-        {"ButtonText", "#FFFFFF"},
-        {"Link", "#2a82da"},
-        {"Highlight", "#2a82da"},
-        {"HighlightedText", "#212121"},
-        {"ActiveButton", "#303030"},
-        {"DisabledButtonText", "#757575"},
-        {"DisabledWindowText", "#808080"},
-        {"DisabledText", "#808080"},
-        {"DisabledLight", "#353535"},
-    };
+    std::map<QString, std::map<QString, QString>> themePalettes_ = {};
 };
 
 #endif

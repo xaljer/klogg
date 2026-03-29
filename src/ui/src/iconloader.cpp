@@ -20,6 +20,7 @@
 
 #include "iconloader.h"
 #include "log.h"
+#include "configuration.h"
 
 #include <array>
 
@@ -38,6 +39,65 @@ QIcon IconLoader::load( QString name )
         if ( !pmap.isNull() )
             icon.addPixmap( pmap );
     }
+    return icon;
+}
+
+QIcon IconLoader::loadChecked( QString name, const QColor& checkedColor )
+{
+    auto icon = load( name );
+    const auto effectiveCheckedColor = checkedColor.isValid() ? checkedColor : QColor( "#ffffff" );
+    if ( !effectiveCheckedColor.isValid() ) {
+        return icon;
+    }
+
+    const auto tint = [ &effectiveCheckedColor ]( const QPixmap& source ) {
+        if ( source.isNull() ) {
+            return QPixmap{};
+        }
+
+        auto img = source.toImage().convertToFormat( QImage::Format_ARGB32 );
+        for ( int y = 0; y < img.height(); ++y ) {
+            for ( int x = 0; x < img.width(); ++x ) {
+                auto px = img.pixelColor( x, y );
+                if ( px.alpha() == 0 ) {
+                    continue;
+                }
+
+                px.setRed( effectiveCheckedColor.red() );
+                px.setGreen( effectiveCheckedColor.green() );
+                px.setBlue( effectiveCheckedColor.blue() );
+                img.setPixelColor( x, y, px );
+            }
+        }
+
+        return QPixmap::fromImage( img );
+    };
+
+    for ( int sz : IconSizes ) {
+        const auto size = ( sz <= 0 ) ? QSize( 16, 16 ) : QSize( sz, sz );
+        const auto off = icon.pixmap( size, QIcon::Normal, QIcon::Off );
+        const auto on = tint( off );
+        if ( on.isNull() ) {
+            continue;
+        }
+
+        icon.addPixmap( on, QIcon::Normal, QIcon::On );
+        icon.addPixmap( on, QIcon::Active, QIcon::On );
+        icon.addPixmap( on, QIcon::Selected, QIcon::On );
+        icon.addPixmap( on, QIcon::Disabled, QIcon::On );
+    }
+
+    if ( icon.availableSizes( QIcon::Normal, QIcon::On ).isEmpty() ) {
+        const auto off = icon.pixmap( QSize( 16, 16 ), QIcon::Normal, QIcon::Off );
+        const auto on = tint( off );
+        if ( !on.isNull() ) {
+            icon.addPixmap( on, QIcon::Normal, QIcon::On );
+            icon.addPixmap( on, QIcon::Active, QIcon::On );
+            icon.addPixmap( on, QIcon::Selected, QIcon::On );
+            icon.addPixmap( on, QIcon::Disabled, QIcon::On );
+        }
+    }
+
     return icon;
 }
 bool IconLoader::shouldInvert() const
@@ -73,6 +133,12 @@ QPixmap IconLoader::loadPixmap( QString name, int size ) const
             pmap = invertPixmap( pmap );
         }
     }
+
+    const auto theme = Configuration::get().theme();
+    if ( !pmap.isNull() && invert && theme == ThemeManager::NordThemeKey ) {
+        pmap = invertPixmap( pmap );
+    }
+
     return pmap;
 }
 
@@ -98,6 +164,15 @@ QString IconLoader::makeNonScalableFilename( QString name, int size, bool invert
 
 QPixmap IconLoader::invertPixmap( QPixmap pmap ) const
 {
+    const auto theme = Configuration::get().theme();
+    const auto themePalette = Configuration::get().themePalette( theme );
+    const auto frostColor = [ &themePalette ] {
+        if ( themePalette.count( "Link" ) > 0 ) {
+            return QColor( themePalette.at( "Link" ) );
+        }
+        return QColor( "#88C0D0" );
+    }();
+
     // No suitable inverted icon found for black background; try to
     // auto-invert the default one
     QImage img = pmap.toImage().convertToFormat( QImage::Format_ARGB32 );
@@ -107,7 +182,12 @@ QPixmap IconLoader::invertPixmap( QPixmap pmap ) const
             QColor colour = QColor( qRed( rgba ), qGreen( rgba ), qBlue( rgba ), qAlpha( rgba ) );
             int alpha = colour.alpha();
             if ( colour.saturation() < 5 && colour.alpha() > 10 ) {
-                colour.setHsv( colour.hue(), colour.saturation(), 255 - colour.value() );
+                if ( theme == ThemeManager::NordThemeKey ) {
+                    colour = frostColor;
+                }
+                else {
+                    colour.setHsv( colour.hue(), colour.saturation(), 255 - colour.value() );
+                }
                 colour.setAlpha( alpha );
                 img.setPixel( x, y, colour.rgba() );
             }

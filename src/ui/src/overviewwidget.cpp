@@ -26,6 +26,7 @@
 
 #include "log.h"
 
+#include "configuration.h"
 #include "overviewwidget.h"
 
 #include "overview.h"
@@ -141,7 +142,11 @@ OverviewWidget::OverviewWidget( QWidget* parent )
 
 void OverviewWidget::paintEvent( QPaintEvent* /* paintEvent */ )
 {
-    static const QColor match_color( "red" );
+    auto match_color = QColor( "red" );
+    const auto themePalette = Configuration::get().themePalette( Configuration::get().theme() );
+    if ( themePalette.count( "MatchAccent" ) > 0 ) {
+        match_color = QColor( themePalette.at( "MatchAccent" ) );
+    }
     static const QColor mark_color( "dodgerblue" );
 
     static const QPixmap highlight_pixmap[] = {

@@ -422,6 +422,8 @@ class CrawlerWidget : public QSplitter,
     // Last main line number received
     LineNumber currentLineNumber_;
 
+    void applyToggleButtonPaletteStyle();
+
     // Current number of matches
     LinesCount nbMatches_;
 

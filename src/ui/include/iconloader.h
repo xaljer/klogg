@@ -14,6 +14,7 @@
 #ifndef KLOGG_ICONLOADER_H
 #define KLOGG_ICONLOADER_H
 
+#include <QColor>
 #include <QIcon>
 
 class QWidget;
@@ -22,6 +23,7 @@ class IconLoader {
   public:
     explicit IconLoader( QWidget* widget );
     QIcon load( QString name );
+    QIcon loadChecked( QString name, const QColor& checkedColor );
 
   private:
     bool shouldInvert() const;

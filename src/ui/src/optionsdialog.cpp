@@ -37,10 +37,15 @@
  */
 
 #include <QColorDialog>
+#include <QInputDialog>
 #include <QKeySequenceEdit>
+#include <QLineEdit>
 #include <QMessageBox>
+#include <QScrollArea>
+#include <QSignalBlocker>
 #include <QToolButton>
 #include <QtGui>
+#include <vector>
 
 #include "encodings.h"
 #include "fontutils.h"
@@ -57,6 +62,39 @@
 static constexpr int PollIntervalMin = 10;
 static constexpr int PollIntervalMax = 3600000;
 
+namespace {
+QColor previewTextColor( const QColor& background )
+{
+    const auto yiq = ( background.red() * 299 + background.green() * 587 + background.blue() * 114 )
+                     / 1000;
+    return yiq >= 160 ? QColor( "#111111" ) : QColor( "#f2f2f2" );
+}
+
+void updateColorPreviewButton( QPushButton* button, const QColor& color )
+{
+    if ( button == nullptr ) {
+        return;
+    }
+
+    const auto textColor = previewTextColor( color );
+    const auto borderColor = color.lightness() > 220 ? QColor( "#6b6b6b" ) : color.darker( 170 );
+
+    button->setMinimumWidth( 150 );
+    button->setFixedHeight( 22 );
+    button->setText( color.name( QColor::HexRgb ).toUpper() );
+    button->setStyleSheet( QString( "QPushButton {"
+                                    "background-color: %1;"
+                                    "color: %2;"
+                                    "border: 1px solid %3;"
+                                    "border-radius: 3px;"
+                                    "padding: 2px 6px;"
+                                    "text-align: left;"
+                                    "}" )
+                               .arg( color.name( QColor::HexRgb ), textColor.name(),
+                                     borderColor.name() ) );
+}
+} // namespace
+
 // Constructor
 OptionsDialog::OptionsDialog( QWidget* parent )
     : QDialog( parent )
@@ -66,9 +104,9 @@ OptionsDialog::OptionsDialog( QWidget* parent )
     setupTabs();
     setupFontList();
     setupRegexp();
-    setupStyles();
     setupEncodings();
     setupLanguageList();
+    setupColorsTab();
 
     // Validators
     QValidator* pollingIntervalValidator = new QIntValidator( PollIntervalMin, PollIntervalMax );
@@ -85,7 +123,9 @@ OptionsDialog::OptionsDialog( QWidget* parent )
              [ this ]( auto ) { this->setupArchives(); } );
 
     connect( mainSearchColorButton, &QPushButton::clicked, this, &OptionsDialog::changeMainColor );
+    mainSearchColorButton->setToolTip( tr( "Managed by current theme in Colors & Themes." ) );
     connect( quickFindColorButton, &QPushButton::clicked, this, &OptionsDialog::changeQfColor );
+    quickFindColorButton->setToolTip( tr( "Managed by current theme in Colors & Themes." ) );
 
     connect( restoreShortcutsDefaults, &QPushButton::clicked, this, [ this ]() {
         auto ret = QMessageBox::question(
@@ -122,6 +162,7 @@ void OptionsDialog::setupTabs()
     regexpEngineLabel->setVisible( false );
     regexpEngineComboBox->setVisible( false );
 #endif
+
 }
 
 // Populates the 'family' ComboBox
@@ -146,11 +187,6 @@ void OptionsDialog::setupRegexp()
     regexpEngines << tr( "Hyperscan" ) << tr( "Qt" );
 
     regexpEngineComboBox->addItems( regexpEngines );
-}
-
-void OptionsDialog::setupStyles()
-{
-    styleComboBox->addItems( StyleManager::availableStyles() );
 }
 
 void OptionsDialog::setupEncodings()
@@ -191,6 +227,330 @@ void OptionsDialog::setupLanguageList()
             QXmlStreamAttributes attributes = xml.attributes();
             languageComboBox->addItem( attributes.value( "name" ).toString(),
                                        attributes.value( "ietfCode" ).toString() );
+        }
+    }
+}
+
+void OptionsDialog::setupColorsTab()
+{
+    auto* colorsTab = new QWidget( this );
+    auto* colorsTabLayout = new QVBoxLayout( colorsTab );
+
+    auto* darkPaletteBox = new QGroupBox( tr( "Theme palette colors" ), colorsTab );
+    auto* darkPaletteRootLayout = new QVBoxLayout( darkPaletteBox );
+    auto* selectorLayout = new QHBoxLayout();
+    auto* themeSelectorLabel = new QLabel( tr( "Theme:" ), darkPaletteBox );
+    themeComboBox_ = new QComboBox( darkPaletteBox );
+    resetThemeButton_ = new QPushButton( tr( "Reset to default" ), darkPaletteBox );
+    cloneThemeButton_ = new QPushButton( tr( "Create from current" ), darkPaletteBox );
+    themeSelectorLabel->setToolTip( tr( "Theme controls colors." ) );
+    themeComboBox_->setToolTip( themeSelectorLabel->toolTip() );
+    selectorLayout->addWidget( themeSelectorLabel );
+    selectorLayout->addWidget( themeComboBox_, 1 );
+    selectorLayout->addWidget( resetThemeButton_ );
+    selectorLayout->addWidget( cloneThemeButton_ );
+    selectorLayout->addStretch();
+    darkPaletteRootLayout->addLayout( selectorLayout );
+
+    struct PaletteField {
+        QString section;
+        QString key;
+        QString title;
+        QString usage;
+    };
+    struct PaletteRow {
+        QString section;
+        PaletteField left;
+        PaletteField right;
+    };
+
+    const std::vector<PaletteRow> paletteRows = {
+        { tr( "General UI" ),
+          { tr( "General UI" ), "Window", tr( "Window background" ),
+            tr( "Dialogs and panel backgrounds (for example, Preferences window)." ) },
+          { tr( "General UI" ), "WindowText", tr( "Window text" ),
+            tr( "Text shown on window/panel backgrounds." ) } },
+        { tr( "General UI" ),
+          { tr( "General UI" ), "Base", tr( "Content background" ),
+            tr( "Editable/input content areas, such as text inputs and list content." ) },
+          { tr( "General UI" ), "LineNumberText", tr( "Line number text" ),
+            tr( "Text color of line numbers in log views." ) } },
+        { tr( "General UI" ),
+          { tr( "General UI" ), "AlternateBase", tr( "Secondary content background" ),
+            tr( "Alternate rows/side areas and secondary content backgrounds." ) },
+          {} },
+        { tr( "General UI" ),
+          { tr( "General UI" ), "MatchAccent", tr( "Matches overview accent" ),
+            tr( "Color for matches markers in overview and match bullets." ) },
+          {} },
+
+        { tr( "Buttons" ),
+          { tr( "Buttons" ), "Button", tr( "Button background" ),
+            tr( "Button face/background color." ) },
+          { tr( "Buttons" ), "ButtonText", tr( "Button foreground" ),
+            tr( "Foreground color on buttons." ) } },
+        { tr( "Buttons" ),
+          { tr( "Buttons" ), "ToggleCheckedBackground", tr( "Toggle checked background" ),
+            tr( "Background color for checked toggle buttons." ) },
+          { tr( "Buttons" ), "ToggleCheckedText", tr( "Toggle checked foreground" ),
+            tr( "Foreground color (text/icon) for checked toggle buttons." ) } },
+
+        { tr( "Text and selection" ),
+          { tr( "Text and selection" ), "Text", tr( "Primary text" ),
+            tr( "Main readable text in content areas." ) },
+          { tr( "Text and selection" ), "Link", tr( "Link" ), tr( "Hyperlink color." ) } },
+        { tr( "Text and selection" ),
+          { tr( "Text and selection" ), "Highlight", tr( "Selection background" ),
+            tr( "Selected item/text background." ) },
+          { tr( "Text and selection" ), "HighlightedText", tr( "Selection text" ),
+            tr( "Text color on selected background." ) } },
+        { tr( "Search highlights" ),
+          { tr( "Search highlights" ), "MainSearchBack", tr( "Main search highlight" ),
+            tr( "Background color for highlighted main search matches." ) },
+          { tr( "Search highlights" ), "QuickFindBack", tr( "QuickFind highlight" ),
+            tr( "Background color for QuickFind matches." ) } },
+
+        { tr( "Tooltips" ),
+          { tr( "Tooltips" ), "ToolTipBase", tr( "Tooltip background" ),
+            tr( "Tooltip popup background." ) },
+          { tr( "Tooltips" ), "ToolTipText", tr( "Tooltip text" ),
+            tr( "Tooltip text color." ) } },
+
+        { tr( "Borders and separators" ),
+          { tr( "Borders and separators" ), "Mid", tr( "Separator" ),
+            tr( "Medium separators and subtle borders." ) },
+          { tr( "Borders and separators" ), "Dark", tr( "Strong separator" ),
+            tr( "Darker separators and outlines." ) } },
+        { tr( "Borders and separators" ),
+          { tr( "Borders and separators" ), "Shadow", tr( "Shadow" ),
+            tr( "Strongest border/shadow color." ) },
+          {} },
+
+        { tr( "Disabled state" ),
+          { tr( "Disabled state" ), "DisabledText", tr( "Disabled text" ),
+            tr( "Disabled text in content areas." ) },
+          { tr( "Disabled state" ), "DisabledWindowText", tr( "Disabled window text" ),
+            tr( "Disabled text shown on window/panel background." ) } },
+        { tr( "Disabled state" ),
+          { tr( "Disabled state" ), "DisabledButtonText", tr( "Disabled button text" ),
+            tr( "Text color for disabled buttons." ) },
+          {} },
+    };
+
+    auto currentSection = QString();
+    auto sectionItemIndex = 0;
+    QGridLayout* currentSectionLayout = nullptr;
+
+    for ( std::size_t i = 0; i < paletteRows.size(); ++i ) {
+        const auto& rowDef = paletteRows[ i ];
+
+        if ( rowDef.section != currentSection ) {
+            auto* sectionBox = new QGroupBox( rowDef.section, darkPaletteBox );
+            auto* sectionLayout = new QGridLayout( sectionBox );
+            sectionBox->setLayout( sectionLayout );
+            darkPaletteRootLayout->addWidget( sectionBox );
+
+            currentSection = rowDef.section;
+            sectionItemIndex = 0;
+            currentSectionLayout = sectionLayout;
+        }
+
+        const auto row = sectionItemIndex;
+
+        auto addFieldToColumn = [ this, currentSectionLayout, row ]( const PaletteField& field,
+                                                                      int col ) {
+            if ( field.key.isEmpty() ) {
+                return;
+            }
+
+            auto* keyLabel = new QLabel( field.title + ":", currentSectionLayout->parentWidget() );
+            keyLabel->setToolTip( field.usage );
+            auto* keyButton = new QPushButton( currentSectionLayout->parentWidget() );
+            keyButton->setText( "" );
+            keyButton->setToolTip( field.usage );
+            keyButton->setProperty( "colorKey", field.key );
+            connect( keyButton, &QPushButton::clicked, this, &OptionsDialog::changeDarkPaletteColor );
+
+            darkPaletteButtons_[ field.key ] = keyButton;
+
+            currentSectionLayout->addWidget( keyLabel, row, col );
+            currentSectionLayout->addWidget( keyButton, row, col + 1 );
+        };
+
+        addFieldToColumn( rowDef.left, 0 );
+        addFieldToColumn( rowDef.right, 2 );
+        ++sectionItemIndex;
+    }
+
+    connect( themeComboBox_, qOverload<int>( &QComboBox::currentIndexChanged ), this,
+             [ this ]( int index ) {
+                 if ( index < 0 ) {
+                     return;
+                 }
+
+                 selectedThemeName_ = themeComboBox_->itemData( index ).toString();
+                 if ( selectedThemeName_.isEmpty() ) {
+                     selectedThemeName_ = themeComboBox_->itemText( index );
+                 }
+
+                 if ( themePaletteColors_.count( selectedThemeName_ ) == 0 ) {
+                     themePaletteColors_[ selectedThemeName_ ]
+                         = Configuration::get().themePalette( selectedThemeName_ );
+                 }
+
+                 applySearchColorsFromTheme( selectedThemeName_ );
+                 applyThemePaletteToButtons( selectedThemeName_ );
+             } );
+    connect( resetThemeButton_, &QPushButton::clicked, this, &OptionsDialog::resetCurrentThemePalette );
+    connect( cloneThemeButton_, &QPushButton::clicked, this, &OptionsDialog::createThemeFromCurrent );
+
+    auto* colorsScrollArea = new QScrollArea( colorsTab );
+    colorsScrollArea->setWidgetResizable( true );
+    colorsScrollArea->setFrameShape( QFrame::NoFrame );
+
+    auto* colorsScrollContent = new QWidget( colorsScrollArea );
+    auto* colorsScrollLayout = new QVBoxLayout( colorsScrollContent );
+    colorsScrollLayout->setContentsMargins( 0, 0, 0, 0 );
+    colorsScrollLayout->addWidget( darkPaletteBox );
+    colorsScrollLayout->addStretch();
+
+    colorsScrollArea->setWidget( colorsScrollContent );
+    colorsTabLayout->addWidget( colorsScrollArea );
+
+    tabWidget->addTab( colorsTab, tr( "Colors & Themes" ) );
+}
+
+void OptionsDialog::refreshThemeSelector()
+{
+    if ( themeComboBox_ == nullptr ) {
+        return;
+    }
+
+    const auto previouslySelectedTheme = selectedThemeName_;
+
+    QSignalBlocker blocker( themeComboBox_ );
+    themeComboBox_->clear();
+
+    const auto windowsDarkLegacyName = QString( "%1 Dark" ).arg( QString( "Windows" ) );
+    const auto isStyleLikeThemeName = [ &windowsDarkLegacyName ]( const QString& themeName ) {
+        static const QStringList legacyStyleNames = {
+            QString( ThemeManager::FusionKey ),
+            QString( "Windows" ),
+            QString( "WindowsVista" ),
+            QString( "macintosh" ),
+            QString( "Gtk2" ),
+            QString( "bb10" ),
+            QString( "OneDark" ),
+            QString( "Custom" ),
+        };
+
+        return legacyStyleNames.contains( themeName ) || themeName == windowsDarkLegacyName;
+    };
+
+    QStringList themes;
+    for ( const auto& [ themeName, palette ] : themePaletteColors_ ) {
+        Q_UNUSED( palette );
+        if ( isStyleLikeThemeName( themeName ) ) {
+            continue;
+        }
+        themes.append( themeName );
+    }
+
+    std::sort( themes.begin(), themes.end(), []( const auto& lhs, const auto& rhs ) {
+        return lhs.compare( rhs, Qt::CaseInsensitive ) < 0;
+    } );
+    for ( const auto& theme : themes ) {
+        themeComboBox_->addItem( displayThemeName( theme ), theme );
+    }
+
+    auto selected = previouslySelectedTheme;
+    if ( selected.isEmpty() || themeComboBox_->findData( selected ) < 0 ) {
+        selected = QString( ThemeManager::NordLightThemeKey );
+    }
+    if ( themeComboBox_->findData( selected ) < 0 && themeComboBox_->count() > 0 ) {
+        selected = themeComboBox_->itemData( 0 ).toString();
+        if ( selected.isEmpty() ) {
+            selected = themeComboBox_->itemText( 0 );
+        }
+    }
+
+    selectedThemeName_ = selected;
+    if ( !selectedThemeName_.isEmpty() ) {
+        const auto idx = themeComboBox_->findData( selectedThemeName_ );
+        if ( idx >= 0 ) {
+            themeComboBox_->setCurrentIndex( idx );
+        }
+    }
+}
+
+QString OptionsDialog::displayThemeName( const QString& themeName ) const
+{
+    if ( themeName == ThemeManager::LightThemeKey ) {
+        return tr( "Light" );
+    }
+    if ( themeName == ThemeManager::SpringThemeKey ) {
+        return tr( "Spring" );
+    }
+    if ( themeName == ThemeManager::DarkThemeKey ) {
+        return tr( "Dark" );
+    }
+    if ( themeName == ThemeManager::NordThemeKey ) {
+        return tr( "Nord" );
+    }
+    if ( themeName == ThemeManager::NordLightThemeKey ) {
+        return tr( "Nord Light" );
+    }
+
+    return themeName;
+}
+
+QString OptionsDialog::currentSelectedThemeFromCombo() const
+{
+    if ( themeComboBox_ == nullptr ) {
+        return QString();
+    }
+
+    auto theme = themeComboBox_->currentData().toString();
+    if ( theme.isEmpty() ) {
+        theme = themeComboBox_->currentText();
+    }
+    return theme;
+}
+
+void OptionsDialog::applyThemePaletteToButtons( const QString& themeName )
+{
+    if ( themeName.isEmpty() || themePaletteColors_.count( themeName ) == 0 ) {
+        return;
+    }
+
+    const auto& palette = themePaletteColors_.at( themeName );
+    for ( const auto& [ colorKey, button ] : darkPaletteButtons_ ) {
+        if ( button != nullptr && palette.count( colorKey ) > 0 ) {
+            updateColorPreviewButton( button, QColor( palette.at( colorKey ) ) );
+        }
+    }
+}
+
+void OptionsDialog::applySearchColorsFromTheme( const QString& themeName )
+{
+    if ( themeName.isEmpty() || themePaletteColors_.count( themeName ) == 0 ) {
+        return;
+    }
+
+    const auto& palette = themePaletteColors_.at( themeName );
+    if ( const auto it = palette.find( "MainSearchBack" ); it != palette.end() ) {
+        const auto color = QColor( it->second );
+        if ( color.isValid() ) {
+            mainSearchColor_ = color;
+            HighlighterEdit::updateIcon( mainSearchColorButton, mainSearchColor_ );
+        }
+    }
+
+    if ( const auto it = palette.find( "QuickFindBack" ); it != palette.end() ) {
+        const auto color = QColor( it->second );
+        if ( color.isValid() ) {
+            qfSearchColor_ = color;
+            HighlighterEdit::updateIcon( quickFindColorButton, qfSearchColor_ );
         }
     }
 }
@@ -312,23 +672,43 @@ void OptionsDialog::updateDialogFromConfig()
     }
     languageComboBox->setCurrentIndex( langIdx );
 
-    const auto style = config.style();
-    if ( !styleComboBox->findText( style, Qt::MatchExactly ) ) {
-        styleComboBox->setCurrentIndex( 0 );
-    }
-    else {
-        styleComboBox->setCurrentText( style );
-    }
-
     hideAnsiColorsCheckBox->setChecked( config.hideAnsiColorSequences() );
 
     // Regexp types
     mainSearchBox->setCurrentIndex( getRegexpTypeIndex( config.mainRegexpType() ) );
     mainSearchColor_ = config.mainSearchBackColor();
     HighlighterEdit::updateIcon( mainSearchColorButton, mainSearchColor_ );
+
+    mainSearchForeColor_ = config.mainSearchForeColor();
+
     quickFindSearchBox->setCurrentIndex( getRegexpTypeIndex( config.quickfindRegexpType() ) );
     qfSearchColor_ = config.qfBackColor();
     HighlighterEdit::updateIcon( quickFindColorButton, qfSearchColor_ );
+
+    themePaletteColors_ = config.themePalettes();
+    defaultThemePaletteColors_.clear();
+    for ( const auto& [ themeName, palette ] : themePaletteColors_ ) {
+        if ( ThemeManager::availableThemes().contains( themeName ) ) {
+            defaultThemePaletteColors_[ themeName ] = ThemeManager::defaultThemePalette( themeName );
+        }
+        else {
+            defaultThemePaletteColors_[ themeName ] = palette;
+        }
+    }
+
+    selectedThemeName_ = config.theme();
+    refreshThemeSelector();
+    if ( themeComboBox_ != nullptr ) {
+        auto idx = themeComboBox_->findData( selectedThemeName_ );
+        if ( idx < 0 ) {
+            idx = themeComboBox_->findData( QString( ThemeManager::NordLightThemeKey ) );
+        }
+        if ( idx >= 0 ) {
+            themeComboBox_->setCurrentIndex( idx );
+        }
+    }
+    applySearchColorsFromTheme( selectedThemeName_ );
+    applyThemePaletteToButtons( selectedThemeName_ );
     regexpEngineComboBox->setCurrentIndex( getRegexpEngineIndex( config.regexpEngine() ) );
     autoRunSearchOnAddCheckBox->setChecked( config.autoRunSearchOnPatternChange() );
 
@@ -413,6 +793,19 @@ void OptionsDialog::changeMainColor()
     if ( HighlighterEdit::showColorPicker( mainSearchColor_, newColor ) ) {
         mainSearchColor_ = newColor;
         HighlighterEdit::updateIcon( mainSearchColorButton, mainSearchColor_ );
+        if ( !selectedThemeName_.isEmpty() && themePaletteColors_.count( selectedThemeName_ ) > 0 ) {
+            themePaletteColors_[ selectedThemeName_ ]["MainSearchBack"]
+                = newColor.name( QColor::HexArgb );
+            applyThemePaletteToButtons( selectedThemeName_ );
+        }
+    }
+}
+
+void OptionsDialog::changeMainForeColor()
+{
+    QColor newColor;
+    if ( HighlighterEdit::showColorPicker( mainSearchForeColor_, newColor ) ) {
+        mainSearchForeColor_ = newColor;
     }
 }
 
@@ -422,7 +815,110 @@ void OptionsDialog::changeQfColor()
     if ( HighlighterEdit::showColorPicker( qfSearchColor_, newColor ) ) {
         qfSearchColor_ = newColor;
         HighlighterEdit::updateIcon( quickFindColorButton, qfSearchColor_ );
+        if ( !selectedThemeName_.isEmpty() && themePaletteColors_.count( selectedThemeName_ ) > 0 ) {
+            themePaletteColors_[ selectedThemeName_ ]["QuickFindBack"]
+                = newColor.name( QColor::HexArgb );
+            applyThemePaletteToButtons( selectedThemeName_ );
+        }
     }
+}
+
+void OptionsDialog::changeDarkPaletteColor()
+{
+    auto* button = qobject_cast<QPushButton*>( sender() );
+    if ( button == nullptr ) {
+        return;
+    }
+
+    const auto colorKey = button->property( "colorKey" ).toString();
+    if ( selectedThemeName_.isEmpty() || colorKey.isEmpty()
+         || themePaletteColors_.count( selectedThemeName_ ) == 0
+         || themePaletteColors_.at( selectedThemeName_ ).count( colorKey ) == 0 ) {
+        return;
+    }
+
+    auto currentColor = QColor( themePaletteColors_.at( selectedThemeName_ ).at( colorKey ) );
+    QColor newColor;
+    if ( HighlighterEdit::showColorPicker( currentColor, newColor ) ) {
+        themePaletteColors_[ selectedThemeName_ ][ colorKey ] = newColor.name( QColor::HexArgb );
+
+        if ( colorKey == QString( "MainSearchBack" ) ) {
+            mainSearchColor_ = newColor;
+            HighlighterEdit::updateIcon( mainSearchColorButton, mainSearchColor_ );
+        }
+        else if ( colorKey == QString( "QuickFindBack" ) ) {
+            qfSearchColor_ = newColor;
+            HighlighterEdit::updateIcon( quickFindColorButton, qfSearchColor_ );
+        }
+
+        updateColorPreviewButton( button, newColor );
+    }
+}
+
+void OptionsDialog::resetCurrentThemePalette()
+{
+    if ( selectedThemeName_.isEmpty() ) {
+        return;
+    }
+
+    if ( defaultThemePaletteColors_.count( selectedThemeName_ ) == 0 ) {
+        defaultThemePaletteColors_[ selectedThemeName_ ]
+            = ThemeManager::defaultThemePalette( selectedThemeName_ );
+    }
+
+    themePaletteColors_[ selectedThemeName_ ] = defaultThemePaletteColors_.at( selectedThemeName_ );
+    applySearchColorsFromTheme( selectedThemeName_ );
+    applyThemePaletteToButtons( selectedThemeName_ );
+}
+
+void OptionsDialog::createThemeFromCurrent()
+{
+    if ( selectedThemeName_.isEmpty() || themePaletteColors_.count( selectedThemeName_ ) == 0 ) {
+        return;
+    }
+
+    bool ok = false;
+    const auto name = QInputDialog::getText( this, tr( "Create theme" ), tr( "Theme name:" ),
+                                             QLineEdit::Normal, QString(), &ok )
+                          .trimmed();
+    if ( !ok || name.isEmpty() ) {
+        return;
+    }
+
+    if ( themePaletteColors_.count( name ) > 0 ) {
+        QMessageBox::warning( this, tr( "Create theme" ), tr( "Theme already exists." ) );
+        return;
+    }
+
+    const auto windowsDarkLegacyName = QString( "%1 Dark" ).arg( QString( "Windows" ) );
+    static const QStringList reservedThemeNames = {
+        QString( ThemeManager::FusionKey ),
+        QString( "Windows" ),
+        QString( "WindowsVista" ),
+        QString( "macintosh" ),
+        QString( "Gtk2" ),
+        QString( "bb10" ),
+    };
+    if ( reservedThemeNames.contains( name ) || name == windowsDarkLegacyName
+         || name == QString( "OneDark" )
+         || name == QString( "Custom" ) ) {
+        QMessageBox::warning( this, tr( "Create theme" ),
+                              tr( "Theme name conflicts with reserved style/theme names." ) );
+        return;
+    }
+
+    themePaletteColors_[ name ] = themePaletteColors_.at( selectedThemeName_ );
+    defaultThemePaletteColors_[ name ] = themePaletteColors_[ name ];
+    selectedThemeName_ = name;
+
+    refreshThemeSelector();
+    if ( themeComboBox_ != nullptr ) {
+        const auto idx = themeComboBox_->findData( selectedThemeName_ );
+        if ( idx >= 0 ) {
+            themeComboBox_->setCurrentIndex( idx );
+        }
+    }
+    applyThemePaletteToButtons( selectedThemeName_ );
 }
 
 void OptionsDialog::checkShortcutsOnDuplicate() const
@@ -485,6 +981,10 @@ int OptionsDialog::updateTranslate()
 
 void OptionsDialog::updateConfigFromDialog()
 {
+    const auto oldLanguage = Configuration::get().language();
+    const auto oldEnableQtHighDpi = Configuration::get().enableQtHighDpi();
+    const auto oldScaleFactorRounding = Configuration::get().scaleFactorRounding();
+
     bool restartAppMessage = false;
     auto& config = Configuration::get();
 
@@ -498,6 +998,7 @@ void OptionsDialog::updateConfigFromDialog()
 
     config.setMainRegexpType( getRegexpTypeFromIndex( mainSearchBox->currentIndex() ) );
     config.setMainSearchBackColor( mainSearchColor_ );
+    config.setMainSearchForeColor( mainSearchForeColor_ );
     config.setEnableMainSearchHighlight( highlightMainSearchCheckBox->isChecked() );
     config.setVariateMainSearchHighlight( variateHighlightCheckBox->isChecked() );
     config.setSearchIgnoreCaseDefault( !caseSensitiveCheckBox->isChecked() );
@@ -545,9 +1046,21 @@ void OptionsDialog::updateConfigFromDialog()
 
     config.setVerifySslPeers( verifySslCheckBox->isChecked() );
 
-    restartAppMessage = config.style() != styleComboBox->currentText();
+    const auto themeChanged
+        = ( themeComboBox_ != nullptr ) && ( config.theme() != currentSelectedThemeFromCombo() );
 
-    config.setStyle( styleComboBox->currentText() );
+    const auto themePaletteChanged = config.themePalettes() != themePaletteColors_;
+
+    config.setTheme( currentSelectedThemeFromCombo() );
+    for ( const auto& [ themeName, palette ] : themePaletteColors_ ) {
+        config.setThemePalette( themeName, palette );
+    }
+
+    if ( themeChanged || themePaletteChanged ) {
+        ThemeManager::applyFrameworkStyle();
+        ThemeManager::applyTheme( config.theme() );
+    }
+
     config.setHideAnsiColorSequences( hideAnsiColorsCheckBox->isChecked() );
 
     config.setDefaultEncodingMib( encodingComboBox->currentData().toInt() );
@@ -571,7 +1084,7 @@ void OptionsDialog::updateConfigFromDialog()
     config.setShortcuts( shortcuts );
 
     // update translate when accept or apply clicked
-    restartAppMessage |= config.language() != languageComboBox->currentData().toString();
+    restartAppMessage |= oldLanguage != languageComboBox->currentData().toString();
     updateTranslate();
     config.setLanguage( languageComboBox->currentData().toString() );
     retranslateUi( this );
@@ -585,6 +1098,9 @@ void OptionsDialog::updateConfigFromDialog()
     auto& recentFiles = RecentFiles::get();
     recentFiles.setFilesHistoryMaxItems( filesHistoryMaxItemsSpinBox->value() );
     recentFiles.save();
+
+    restartAppMessage |= oldEnableQtHighDpi != enableQtHiDpiCheckBox->isChecked();
+    restartAppMessage |= oldScaleFactorRounding != ( scaleRoundingComboBox->currentIndex() + 1 );
 
     if ( restartAppMessage ) {
         QMessageBox::warning(

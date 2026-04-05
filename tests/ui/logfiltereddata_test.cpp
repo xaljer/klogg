@@ -97,6 +97,11 @@ struct LogDataLoader {
         REQUIRE( loadEndSpy.safeWait( 10000 ) );
     }
 
+    ~LogDataLoader()
+    {
+        log_data.interruptLoading();
+    }
+
     QTemporaryFile file{ "filtered_test_XXXXXX" };
     LogData log_data;
 };
@@ -217,11 +222,17 @@ SCENARIO( "marks in filtered log data", "[logdata]" )
 
 SCENARIO( "search for regex", "[logdata]" )
 {
-    LogDataLoader logDataLoader;
+    QTemporaryFile file{ "filtered_test_XXXXXX" };
+    LogData log_data;
 
     GIVEN( "loaded log data" )
     {
-        auto filtered_data = logDataLoader.log_data.getNewFilteredData();
+        REQUIRE( generateDataFiles( file ) );
+        SafeQSignalSpy loadEndSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
+        log_data.attachFile( file.fileName() );
+        REQUIRE( loadEndSpy.safeWait( 10000 ) );
+
+        auto filtered_data = log_data.getNewFilteredData();
 
         WHEN( "Searched for regex" )
         {
@@ -259,11 +270,17 @@ SCENARIO( "search for regex", "[logdata]" )
 
 SCENARIO( "marks and matches in filtered log data", "[logdata]" )
 {
-    LogDataLoader logDataLoader;
+    QTemporaryFile file{ "filtered_test_XXXXXX" };
+    LogData log_data;
 
     GIVEN( "loaded log data" )
     {
-        auto filtered_data = logDataLoader.log_data.getNewFilteredData();
+        REQUIRE( generateDataFiles( file ) );
+        SafeQSignalSpy loadEndSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
+        log_data.attachFile( file.fileName() );
+        REQUIRE( loadEndSpy.safeWait( 10000 ) );
+
+        auto filtered_data = log_data.getNewFilteredData();
 
         WHEN( "Searched for regex" )
         {

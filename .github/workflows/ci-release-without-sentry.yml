@@ -1,4 +1,4 @@
-name: "Make CI Release"
+name: "Make CI Release (without sentry)"
 
 on:
   workflow_dispatch:
@@ -6,6 +6,9 @@ on:
       ci-run-id:
         description: "Run ID of CI workflow"
         required: false
+
+permissions:
+  contents: write
 
 jobs:
   release:
@@ -32,49 +35,16 @@ jobs:
     - name: Display structure of downloaded files
       run: ls -R ./packages-*
 
-    - name: Setup Sentry CLI
-      uses: mathrix-education/setup-sentry-cli@0.1.0
-      env:
-        ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
-      with:
-        token: ${{ secrets.SENTRY_TOKEN }}
-        organization: anton-filimonov
-        project: klogg
-
-    - name: Create Sentry release
-      shell: sh
-      run: |
-        sentry-cli releases new $KLOGG_VERSION
-        sentry-cli releases set-commits --auto $KLOGG_VERSION
-
-    - name: Upload symbols linux
-      shell: sh
-      run: |
-        xz -d ./packages-focal/klogg_focal.debug.xz
-        xz -d ./packages-jammy/klogg_jammy.debug.xz
-        xz -d ./packages-noble/klogg_noble.debug.xz
-        xz -d ./packages-oracle/klogg_oracle.debug.xz
-        xz -d ./packages-appimage/klogg_appimage.debug.xz
-        sentry-cli upload-dif ./packages-focal/klogg_focal.debug ./packages-focal/klogg_focal
-        sentry-cli upload-dif ./packages-jammy/klogg_jammy.debug ./packages-jammy/klogg_jammy
-        sentry-cli upload-dif ./packages-noble/klogg_noble.debug  ./packages-noble/klogg_noble
-        sentry-cli upload-dif ./packages-oracle/klogg_oracle.debug ./packages-oracle/klogg_oracle
-        sentry-cli upload-dif ./packages-appimage/klogg_appimage.debug  ./packages-appimage/klogg_appimage
-
-    - name: Upload symbols mac
-      shell: sh
-      run: |
-        sentry-cli upload-dif ./packages-macos-arm-qt6/klogg-arm64.app/Contents/MacOS/klogg ./packages-macos-arm-qt6/klogg-arm64.dSym
-
-    - name: Upload symbols win
-      shell: sh
-      run: |
-        sentry-cli upload-dif ./packages-windows-x86-qt5/klogg-$KLOGG_VERSION-x86-Qt5-pdb.zip 
-        sentry-cli upload-dif ./packages-windows-x64-qt6/klogg-$KLOGG_VERSION-x64-Qt6-pdb.zip
-
     - name: Cleanup release artifacts
       shell: sh
       run: |
+        # Debug symbols are optional in without-sentry flow.
+        # Known case: oracle debug symbols may be missing because Oracle build uses -DKLOGG_USE_SENTRY=OFF in ci-build.yml.
+        [ -f ./packages-focal/klogg_focal.debug.xz ] && xz -d ./packages-focal/klogg_focal.debug.xz || echo "warn: missing focal debug symbols"
+        [ -f ./packages-jammy/klogg_jammy.debug.xz ] && xz -d ./packages-jammy/klogg_jammy.debug.xz || echo "warn: missing jammy debug symbols"
+        [ -f ./packages-noble/klogg_noble.debug.xz ] && xz -d ./packages-noble/klogg_noble.debug.xz || echo "warn: missing noble debug symbols"
+        [ -f ./packages-oracle/klogg_oracle.debug.xz ] && xz -d ./packages-oracle/klogg_oracle.debug.xz || echo "warn: missing oracle debug symbols (known)"
+        [ -f ./packages-appimage/klogg_appimage.debug.xz ] && xz -d ./packages-appimage/klogg_appimage.debug.xz || echo "warn: missing appimage debug symbols"
         rm -rf ./packages-focal/klogg_focal
         rm -rf ./packages-jammy/klogg_jammy
         rm -rf ./packages-noble/klogg_noble
@@ -82,13 +52,12 @@ jobs:
         rm -rf ./packages-appimage/klogg_appimage
         rm -rf ./packages-macos-arm-qt6/klogg-arm64.app
         mkdir ./linux-debug
-        mv ./packages-focal/klogg_focal.debug ./linux-debug
-        mv ./packages-jammy/klogg_jammy.debug ./linux-debug
-        mv ./packages-noble/klogg_noble.debug ./linux-debug
-        mv ./packages-oracle/klogg_oracle.debug ./linux-debug
-        mv ./packages-appimage/klogg_appimage.debug ./linux-debug
-        tar -cJf ./linux-debug/klogg-$KLOGG_VERSION-symbols.tar.xz ./linux-debug/*
-        rm ./linux-debug/*.debug
+        [ -f ./packages-focal/klogg_focal.debug ] && mv ./packages-focal/klogg_focal.debug ./linux-debug
+        [ -f ./packages-jammy/klogg_jammy.debug ] && mv ./packages-jammy/klogg_jammy.debug ./linux-debug
+        [ -f ./packages-noble/klogg_noble.debug ] && mv ./packages-noble/klogg_noble.debug ./linux-debug
+        [ -f ./packages-oracle/klogg_oracle.debug ] && mv ./packages-oracle/klogg_oracle.debug ./linux-debug
+        [ -f ./packages-appimage/klogg_appimage.debug ] && mv ./packages-appimage/klogg_appimage.debug ./linux-debug
+        if ls ./linux-debug/*.debug >/dev/null 2>&1; then tar -cJf ./linux-debug/klogg-$KLOGG_VERSION-symbols.tar.xz ./linux-debug/*; rm ./linux-debug/*.debug; else echo "warn: no linux debug symbols packaged"; fi
 
     - name: Prepare binary artifacts
       shell: sh
@@ -106,7 +75,7 @@ jobs:
     - name: Release win
       uses: "marvinpinto/action-automatic-releases@latest"
       with:
-        repo_token: ${{ secrets.KLOGG_GITHUB_TOKEN }}
+        repo_token: ${{ secrets.KLOGG_GITHUB_TOKEN || github.token }}
         automatic_release_tag: continuous-win
         prerelease: true
         files: |
@@ -116,7 +85,7 @@ jobs:
     - name: Release linux
       uses: "marvinpinto/action-automatic-releases@latest"
       with:
-        repo_token: ${{ secrets.KLOGG_GITHUB_TOKEN }}
+        repo_token: ${{ secrets.KLOGG_GITHUB_TOKEN || github.token }}
         automatic_release_tag: continuous-linux
         prerelease: true
         files: |
@@ -131,7 +100,7 @@ jobs:
     - name: Release mac
       uses: "marvinpinto/action-automatic-releases@latest"
       with:
-        repo_token: ${{ secrets.KLOGG_GITHUB_TOKEN }}
+        repo_token: ${{ secrets.KLOGG_GITHUB_TOKEN || github.token }}
         automatic_release_tag: continuous-osx
         prerelease: true
         files: |
@@ -144,8 +113,3 @@ jobs:
       uses: Ilshidur/action-discord@master
       with:
         args: 'New CI build {{KLOGG_VERSION}} has been released!'
-
-
-
-
-   

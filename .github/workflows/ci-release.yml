@@ -137,15 +137,3 @@ jobs:
         files: |
           ./packages-macos-arm-qt6/*
 
-    - name: Discord notification
-      env:
-        DISCORD_WEBHOOK: ${{ secrets.DISCORD_NEW_VERSIONS_WEBHOOK }}
-        DISCORD_EMBEDS: '[{"title": "Windows", "url": "https://github.com/variar/klogg/releases/tag/continuous-win"}, {"title": "Linux", "url": "https://github.com/variar/klogg/releases/tag/continuous-linux"}, {"title": "Mac", "url": "https://github.com/variar/klogg/releases/tag/continuous-osx"}]'
-      uses: Ilshidur/action-discord@master
-      with:
-        args: 'New CI build {{KLOGG_VERSION}} has been released!'
-
-
-
-
-   

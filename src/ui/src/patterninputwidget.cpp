@@ -19,11 +19,16 @@
 
 #include "patterninputwidget.h"
 
+#include <QAbstractItemView>
+#include <QCompleter>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QScrollBar>
 #include <QTimer>
+#include <QToolButton>
 #include <QPushButton>
 
 namespace {
@@ -62,6 +67,7 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
     chipsContainer_->setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Fixed );
     chipsContainer_->setFixedHeight( ChipHeight );
     chipsContainer_->setStyleSheet( "QWidget { background: transparent; }" );
+    chipsContainer_->installEventFilter( this );
     chipsLayout_ = new QHBoxLayout( chipsContainer_ );
     chipsLayout_->setContentsMargins( 0, 0, 0, 0 );
     chipsLayout_->setSpacing( ChipMargin );
@@ -80,6 +86,17 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
 
     connect( lineEdit_, &QLineEdit::textChanged, this, &PatternInputWidget::onLineEditTextChanged );
     connect( lineEdit_, &QLineEdit::returnPressed, this, &PatternInputWidget::onLineEditReturnPressed );
+
+    // History dropdown button (visible in chip mode)
+    historyButton_ = new QToolButton( this );
+    historyButton_->setText( QString( QChar( 0x25BE ) ) );
+    historyButton_->setFixedSize( 16, ChipHeight );
+    historyButton_->setToolTip( tr( "Search history" ) );
+    historyButton_->setAutoRaise( true );
+    historyButton_->hide();
+    mainLayout_->addWidget( historyButton_ );
+
+    connect( historyButton_, &QToolButton::clicked, this, &PatternInputWidget::showHistoryMenu );
 }
 
 QString PatternInputWidget::text() const
@@ -183,11 +200,9 @@ void PatternInputWidget::clearChips()
             chipsToRemove.append( item->widget() );
         }
     }
-    
+
     for ( QWidget* chipWidget : chipsToRemove ) {
-        // Disconnect all signals before deleting to prevent callbacks on deleted objects
         chipWidget->disconnect();
-        // Remove event filter to prevent handling events during deletion
         chipWidget->removeEventFilter( this );
         chipWidget->deleteLater();
     }
@@ -205,10 +220,10 @@ void PatternInputWidget::setChipMode( bool chipMode )
                 updateChips();
                 lineEdit_->clear();
             }
-            // In chip mode: lineEdit_ has minimum width, expands to fill remaining space
             lineEdit_->setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Fixed );
             lineEdit_->setMinimumWidth( MinEditWidth );
             lineEdit_->setMaximumWidth( QWIDGETSIZE_MAX );
+            historyButton_->show();
         }
         else {
             if ( !patterns_.isEmpty() ) {
@@ -216,13 +231,12 @@ void PatternInputWidget::setChipMode( bool chipMode )
             }
             clearChips();
             patterns_.clear();
-            // In normal mode: lineEdit_ fills all available space
             lineEdit_->setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Fixed );
             lineEdit_->setMinimumWidth( 0 );
             lineEdit_->setMaximumWidth( QWIDGETSIZE_MAX );
+            historyButton_->hide();
         }
-        
-        // Update container size
+
         chipsContainer_->adjustSize();
     }
 }
@@ -230,6 +244,23 @@ void PatternInputWidget::setChipMode( bool chipMode )
 bool PatternInputWidget::isChipMode() const
 {
     return isChipMode_;
+}
+
+void PatternInputWidget::setSearchCompleter( QCompleter* completer )
+{
+    completer->setCompletionMode( QCompleter::PopupCompletion );
+    lineEdit_->setCompleter( completer );
+}
+
+void PatternInputWidget::showHistoryMenu()
+{
+    if ( auto* completer = lineEdit_->completer() ) {
+        completer->setCompletionPrefix( QString() );
+        completer->complete();
+        auto* popup = completer->popup();
+        popup->resize( this->width(), popup->height() );
+        popup->move( mapToGlobal( QPoint( 0, height() ) ) );
+    }
 }
 
 void PatternInputWidget::parsePatterns( const QString& text )
@@ -272,6 +303,8 @@ QWidget* PatternInputWidget::createChipWidget( const QString& text, int index )
     QLabel* label = new QLabel( text, chip );
     label->setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Preferred );
     label->setStyleSheet( "QLabel { background: transparent; }" );
+    label->setCursor( Qt::PointingHandCursor );
+    label->installEventFilter( this );
     layout->addWidget( label );
 
     QPushButton* removeButton = new QPushButton( chip );
@@ -287,8 +320,11 @@ QWidget* PatternInputWidget::createChipWidget( const QString& text, int index )
     removeButton->hide();
     layout->addWidget( removeButton );
 
+    const QColor bgColor = palette().color( QPalette::Highlight );
+    const QColor fgColor = palette().color( QPalette::HighlightedText );
     chip->setStyleSheet(
-        QString( "QWidget { background: #e0e0e0; border-radius: %1px; }" ).arg( ChipRadius ) );
+        QString( "QWidget { background: %1; color: %2; border-radius: %3px; }" )
+            .arg( bgColor.name(), fgColor.name(), QString::number( ChipRadius ) ) );
 
     connect( removeButton, &QPushButton::clicked, this, &PatternInputWidget::onChipRemoveClicked );
     chip->installEventFilter( this );
@@ -300,17 +336,14 @@ void PatternInputWidget::updateChips()
 {
     clearChips();
 
-    // Insert chips before lineEdit_
     for ( int i = 0; i < patterns_.size(); ++i ) {
         const QString& pattern = patterns_.at( i );
         if ( !pattern.isEmpty() ) {
             QWidget* chip = createChipWidget( pattern, i );
-            // Insert at position i (before lineEdit_ which is at the end)
             chipsLayout_->insertWidget( i, chip );
         }
     }
 
-    // Update container width
     chipsContainer_->adjustSize();
 }
 
@@ -347,26 +380,27 @@ void PatternInputWidget::onChipRemoveClicked()
     if ( !button ) {
         return;
     }
-    
+
     QWidget* chip = button->parentWidget();
     if ( !chip ) {
         return;
     }
-    
-    // Check if this is a valid chip widget
+
     if ( !chip->property( "chipText" ).isValid() ) {
         return;
     }
-    
+
     QString chipText = chip->property( "chipText" ).toString();
     if ( chipText.isEmpty() ) {
         return;
     }
-    
-    // Capture chipText instead of index to avoid index invalidation
-    // if patterns_ changes between now and the deferred execution
+
+    if ( editingChipEdit_ && editingChipEdit_->parentWidget() == chip ) {
+        editingChipEdit_->setProperty( "editCommitted", true );
+        finishChipEdit( editingChipEdit_, false );
+    }
+
     QTimer::singleShot( 0, this, [ this, chipText ]() {
-        // Double-check that this object is still valid
         if ( !isChipMode_ ) {
             return;
         }
@@ -412,5 +446,157 @@ bool PatternInputWidget::eventFilter( QObject* obj, QEvent* event )
             }
         }
     }
+    else if ( event->type() == QEvent::MouseButtonPress
+              && static_cast<QMouseEvent*>( event )->button() == Qt::LeftButton ) {
+        QLabel* label = qobject_cast<QLabel*>( obj );
+        if ( label ) {
+            QWidget* chip = qobject_cast<QWidget*>( label->parent() );
+            if ( chip && chip->property( "chipText" ).isValid() ) {
+                startChipEdit( label );
+                return true;
+            }
+        }
+    }
+    else if ( event->type() == QEvent::KeyPress ) {
+        QLineEdit* edit = qobject_cast<QLineEdit*>( obj );
+        if ( edit && edit->property( "chipIndex" ).isValid() ) {
+            auto* keyEvent = static_cast<QKeyEvent*>( event );
+            if ( keyEvent->key() == Qt::Key_Escape ) {
+                finishChipEdit( edit, false );
+                return true;
+            }
+        }
+    }
+    else if ( event->type() == QEvent::FocusOut ) {
+        QLineEdit* edit = qobject_cast<QLineEdit*>( obj );
+        if ( edit && edit->property( "chipIndex" ).isValid()
+             && !edit->property( "editFinished" ).toBool() ) {
+            edit->setProperty( "editFinished", true );
+            finishChipEdit( edit, false );
+        }
+    }
     return QWidget::eventFilter( obj, event );
+}
+
+void PatternInputWidget::startChipEdit( QLabel* label )
+{
+    if ( isReadOnly_ ) {
+        return;
+    }
+
+    QWidget* chip = qobject_cast<QWidget*>( label->parent() );
+    if ( !chip ) {
+        return;
+    }
+
+    bool ok;
+    int chipIndex = chip->property( "chipIndex" ).toInt( &ok );
+    if ( !ok || chipIndex < 0 || chipIndex >= patterns_.size() ) {
+        return;
+    }
+
+    const QString originalText = label->text();
+    QHBoxLayout* layout = qobject_cast<QHBoxLayout*>( chip->layout() );
+    if ( !layout ) {
+        return;
+    }
+
+    const int labelIndex = layout->indexOf( label );
+    layout->removeWidget( label );
+    label->removeEventFilter( this );
+    label->deleteLater();
+
+    const QColor bgColor = palette().color( QPalette::Highlight );
+    const QColor fgColor = palette().color( QPalette::HighlightedText );
+    QLineEdit* edit = new QLineEdit( originalText, chip );
+    edit->setProperty( "chipIndex", chipIndex );
+    edit->setProperty( "originalText", originalText );
+    edit->setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Fixed );
+    edit->setFixedHeight( ChipHeight );
+    edit->setStyleSheet(
+        QString( "QLineEdit { border: 1px solid %1; border-radius: 4px; background: %2; color: %3; padding-left: 2px; }" )
+            .arg( bgColor.darker( 130 ).name(), bgColor.name(), fgColor.name() ) );
+    edit->selectAll();
+    edit->installEventFilter( this );
+
+    layout->insertWidget( labelIndex, edit );
+    editingChipEdit_ = edit;
+
+    connect( edit, &QLineEdit::returnPressed, this, [ this, edit ]() {
+        edit->setProperty( "editCommitted", true );
+        finishChipEdit( edit, true );
+    } );
+    connect( edit, &QLineEdit::editingFinished, this, [ this, edit ]() {
+        if ( !edit->property( "editCommitted" ).toBool() ) {
+            finishChipEdit( edit, false );
+        }
+    } );
+
+    edit->setFocus();
+}
+
+void PatternInputWidget::finishChipEdit( QLineEdit* edit, bool accept )
+{
+    if ( !edit ) {
+        return;
+    }
+
+    if ( editingChipEdit_ == edit ) {
+        editingChipEdit_ = nullptr;
+    }
+
+    edit->setProperty( "editFinished", true );
+    edit->blockSignals( true );
+
+    QWidget* chip = qobject_cast<QWidget*>( edit->parent() );
+    if ( !chip ) {
+        edit->deleteLater();
+        return;
+    }
+
+    bool ok;
+    int chipIndex = chip->property( "chipIndex" ).toInt( &ok );
+    if ( !ok ) {
+        edit->deleteLater();
+        return;
+    }
+
+    const QString originalText = edit->property( "originalText" ).toString();
+    QString newText = accept ? edit->text().trimmed() : originalText;
+
+    QHBoxLayout* layout = qobject_cast<QHBoxLayout*>( chip->layout() );
+    if ( !layout ) {
+        edit->deleteLater();
+        return;
+    }
+
+    const int editIndex = layout->indexOf( edit );
+    if ( editIndex < 0 ) {
+        edit->deleteLater();
+        return;
+    }
+
+    edit->removeEventFilter( this );
+    layout->removeWidget( edit );
+    edit->deleteLater();
+
+    QLabel* label = new QLabel( newText, chip );
+    label->setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Preferred );
+    label->setStyleSheet( "QLabel { background: transparent; }" );
+    label->setCursor( Qt::PointingHandCursor );
+    label->installEventFilter( this );
+    layout->insertWidget( editIndex, label );
+
+    if ( accept && newText != originalText ) {
+        if ( chipIndex >= 0 && chipIndex < patterns_.size() ) {
+            if ( !newText.isEmpty() ) {
+                patterns_[ chipIndex ] = newText;
+                chip->setProperty( "chipText", newText );
+                Q_EMIT chipChanged( text() );
+            }
+            else {
+                removeChip( chipIndex );
+            }
+        }
+    }
 }

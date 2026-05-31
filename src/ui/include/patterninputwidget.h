@@ -26,7 +26,10 @@
 #include <QLineEdit>
 #include <QScrollArea>
 #include <QStringList>
+#include <QToolButton>
 #include <QWidget>
+
+class QCompleter;
 
 class PatternInputWidget : public QWidget {
     Q_OBJECT
@@ -59,6 +62,8 @@ class PatternInputWidget : public QWidget {
     void setChipMode( bool chipMode );
     bool isChipMode() const;
 
+    void setSearchCompleter( QCompleter* completer );
+
   Q_SIGNALS:
     void textChanged( const QString& text );
     void chipChanged( const QString& text );
@@ -82,6 +87,10 @@ class PatternInputWidget : public QWidget {
     void removeChip( int index );
     void scrollToEnd();
 
+    void startChipEdit( QLabel* label );
+    void finishChipEdit( QLineEdit* edit, bool accept );
+    void showHistoryMenu();
+
     bool eventFilter( QObject* obj, QEvent* event ) override;
 
     QHBoxLayout* mainLayout_ = nullptr;
@@ -89,6 +98,8 @@ class PatternInputWidget : public QWidget {
     QWidget* chipsContainer_ = nullptr;
     QHBoxLayout* chipsLayout_ = nullptr;
     QLineEdit* lineEdit_ = nullptr;
+    QToolButton* historyButton_ = nullptr;
+    QLineEdit* editingChipEdit_ = nullptr;
 
     QStringList patterns_;
     bool isRegexMode_ = false;

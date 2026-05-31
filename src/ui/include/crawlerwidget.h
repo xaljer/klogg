@@ -390,6 +390,7 @@ class CrawlerWidget : public QSplitter,
     PatternInputWidget* patternInputWidget_;
     QMenu* searchLineContextMenu_;
     QCompleter* searchLineCompleter_;
+    QMetaObject::Connection chipHistoryConnection_;
 
     InfoLine* searchInfoLine_;
 

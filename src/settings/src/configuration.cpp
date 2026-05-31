@@ -304,6 +304,8 @@ void Configuration::retrieveFromStorage( QSettings& settings )
               .toBool();
 
     useTextWrap_ = settings.value( "view.textWrap", DefaultConfiguration.useTextWrap() ).toBool();
+    chipMode_
+        = settings.value( "view.chipMode", DefaultConfiguration.chipMode() ).toBool();
 
     settings.remove( "view.style" );
 
@@ -496,6 +498,7 @@ void Configuration::saveToStorage( QSettings& settings ) const
     settings.setValue( "view.theme", theme_ );
     settings.setValue( "view.language", language_ );
     settings.setValue( "view.textWrap", useTextWrap_ );
+    settings.setValue( "view.chipMode", chipMode_ );
 
     settings.setValue( "view.qtHiDpi", enableQtHighDpi_ );
     settings.setValue( "view.scaleFactorRounding", scaleFactorRounding_ );

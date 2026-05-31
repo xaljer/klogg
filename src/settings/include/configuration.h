@@ -528,6 +528,15 @@ class Configuration final : public Persistable<Configuration> {
         useTextWrap_ = enable;
     }
 
+    bool chipMode() const
+    {
+        return chipMode_;
+    }
+    void setChipMode( bool enable )
+    {
+        chipMode_ = enable;
+    }
+
     bool autoRunSearchOnPatternChange() const
     {
         return autoRunSearchOnPatternChange_;
@@ -693,6 +702,8 @@ class Configuration final : public Persistable<Configuration> {
     bool qfIgnoreCase_ = false;
 
     bool useTextWrap_ = false;
+
+    bool chipMode_ = false;
 
     std::map<std::string, QStringList> shortcuts_;
 

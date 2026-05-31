@@ -577,7 +577,21 @@ void MainWindow::createActions()
     chipModeAction = new QAction( tr( "Chip Input Mode" ), this );
     chipModeAction->setCheckable( true );
     chipModeAction->setStatusTip( tr( "Toggle chip input mode for search patterns" ) );
-    connect( chipModeAction, &QAction::toggled, this, &MainWindow::chipModeSet );
+    globalChipMode_ = Configuration::get().chipMode();
+    chipModeAction->setChecked( globalChipMode_ );
+    connect( chipModeAction, &QAction::toggled, this, [ this ]( bool checked ) {
+        globalChipMode_ = checked;
+        Configuration::get().setChipMode( checked );
+        Configuration::get().save();
+        // Apply to all crawlers since chip mode is global
+        const int count = mainTabWidget_.count();
+        for ( int i = 0; i < count; ++i ) {
+            auto* crawler = qobject_cast<CrawlerWidget*>( mainTabWidget_.widget( i ) );
+            if ( crawler ) {
+                crawler->setChipMode( checked );
+            }
+        }
+    } );
 
     reloadAction = new QAction( tr( action::reloadText ), this );
     signalMux_.connect( reloadAction, SIGNAL( triggered() ), SLOT( reload() ) );
@@ -1513,6 +1527,10 @@ void MainWindow::currentTabChanged( int index )
         Q_EMIT optionsChanged();
 
         updateMenuBarFromDocument( crawler_widget );
+
+        // Apply global chip mode state to this crawler
+        crawler_widget->setChipMode( globalChipMode_ );
+
         updateTitleBar( session_.getFilename( crawler_widget ) );
         updateFavoritesMenu();
 
@@ -1825,6 +1843,9 @@ bool MainWindow::loadFile( const QString& fileName, bool followFile )
 
             int index = mainTabWidget_.addCrawler( crawler_widget, fileName );
 
+            // Apply global chip mode to new crawler
+            crawler_widget->setChipMode( globalChipMode_ );
+
             // Setting the new tab, the user will see a blank page for the duration
             // of the loading, with no way to switch to another tab
             mainTabWidget_.setCurrentIndex( index );
@@ -1951,7 +1972,7 @@ void MainWindow::updateMenuBarFromDocument( const CrawlerWidget* crawler )
     followAction->setChecked( crawler->isFollowEnabled() );
     textWrapAction->setChecked( crawler->isTextWrapEnabled() );
     chipModeAction->blockSignals( true );
-    chipModeAction->setChecked( crawler->isChipMode() );
+    chipModeAction->setChecked( globalChipMode_ );
     chipModeAction->blockSignals( false );
 }
 

@@ -318,6 +318,9 @@ class MainWindow : public QMainWindow {
 
     QTemporaryDir tempDir_;
 
+    // Global chip mode state (shared across all crawlers)
+    bool globalChipMode_ = false;
+
     bool isMaximized_ = false;
     bool isCloseFromTray_ = false;
 

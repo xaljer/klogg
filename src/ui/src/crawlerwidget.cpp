@@ -910,13 +910,17 @@ QString& CrawlerWidget::combinePatterns( QString& currentPattern, const QString&
 void CrawlerWidget::addToSearch( const QString& searchString )
 {
     const auto newPattern = escapeSearchPattern( searchString );
-    QString currentPattern = searchLineEdit_->currentText();
+    QString currentPattern
+        = patternInputWidget_->isChipMode() ? patternInputWidget_->text()
+                                            : searchLineEdit_->currentText();
     setSearchPattern( combinePatterns( currentPattern, newPattern ) );
 }
 
 void CrawlerWidget::excludeFromSearch( const QString& searchString )
 {
-    QString currentPattern = searchLineEdit_->currentText();
+    QString currentPattern
+        = patternInputWidget_->isChipMode() ? patternInputWidget_->text()
+                                            : searchLineEdit_->currentText();
 
     const auto wasInBooleanCombinationMode = booleanButton_->isChecked();
     if ( !wasInBooleanCombinationMode ) {
@@ -981,12 +985,28 @@ void CrawlerWidget::setChipMode( bool enabled )
     patternInputWidget_->setChipMode( enabled );
     if ( enabled ) {
         patternInputWidget_->setText( searchLineEdit_->currentText() );
+        // Set up search history completer on the chip mode input
+        patternInputWidget_->setSearchCompleter( searchLineCompleter_ );
+        if ( !chipHistoryConnection_ ) {
+            chipHistoryConnection_ = connect(
+                searchLineCompleter_, QOverload<const QString&>::of( &QCompleter::activated ),
+                this, [ this ]( const QString& text ) {
+                    QTimer::singleShot( 0, this, [ this, text ]() {
+                        patternInputWidget_->setText( text );
+                        if ( Configuration::get().autoRunSearchOnPatternChange() ) {
+                            dispatchToMainThread( [ this ] { startNewSearch(); } );
+                        }
+                    } );
+                } );
+        }
         searchLineEdit_->hide();
         patternInputWidget_->show();
         setFocusProxy( patternInputWidget_ );
     }
     else {
+        disconnect( chipHistoryConnection_ );
         searchLineEdit_->setEditText( patternInputWidget_->text() );
+        searchLineEdit_->setCompleter( searchLineCompleter_ );
         patternInputWidget_->hide();
         searchLineEdit_->show();
         setFocusProxy( searchLineEdit_ );

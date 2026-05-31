@@ -44,6 +44,7 @@ class HighlighterEdit : public QWidget, public Ui::HighlighterEdit {
   private Q_SLOTS:
     void changeForeColor();
     void changeBackColor();
+    void toggleUseThemeBack( bool useTheme );
     void setPattern( const QString& pattern );
     void setIgnoreCase( bool ignoreCase );
     void setHighlightOnlyMatch( bool onlyMatch );

@@ -91,6 +91,8 @@ class Highlighter {
     void setForeColor( const QColor& foreColor );
     const QColor& backColor() const;
     void setBackColor( const QColor& backColor );
+    bool useThemeBack() const;
+    void setUseThemeBack( bool useTheme );
 
     // Reads/writes the current config in the QSettings object passed
     void saveToStorage( QSettings& settings ) const;
@@ -114,6 +116,7 @@ class Highlighter {
     int colorVariance_ = 15;
 
     HighlightColor color_;
+    bool useThemeBack_ = true;
 };
 
 enum class HighlighterMatchType { NoMatch, WordMatch, LineMatch };

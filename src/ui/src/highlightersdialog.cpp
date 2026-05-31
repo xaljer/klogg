@@ -321,10 +321,12 @@ void HighlightersDialog::resolveDialog( QAbstractButton* button )
     auto& persistentHighlighterSet = HighlighterSetCollection::get();
     if ( role == QDialogButtonBox::AcceptRole ) {
         persistentHighlighterSet = std::move( highlighterSetCollection_ );
+        persistentHighlighterSet.updateCombinedSet();
         accept();
     }
     else if ( role == QDialogButtonBox::ApplyRole ) {
         persistentHighlighterSet = highlighterSetCollection_;
+        persistentHighlighterSet.updateCombinedSet();
     }
     else {
         LOG_ERROR << "unhandled role : " << role;

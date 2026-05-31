@@ -2387,9 +2387,9 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
                 const auto highlightType = highlighterSet.matchLine( logLine, highlighterMatches );
 
                 if ( highlightType == HighlighterMatchType::LineMatch ) {
-                    // color applies to whole line
                     foreColor = highlighterMatches.front().foreColor();
-                    backColor = highlighterMatches.front().backColor();
+                    const auto hBackColor = highlighterMatches.front().backColor();
+                    backColor = hBackColor.isValid() ? hBackColor : backColor;
                 }
 
                 if ( patternHighlight ) {
@@ -2496,8 +2496,10 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
                         = LineLength{ klogg::isize( expandedLine ) - match.startColumn().get() };
                 }
                 if ( matchLengthInString > 0_length ) {
+                    const auto matchBackColor
+                        = match.backColor().isValid() ? match.backColor() : backColor;
                     lineDrawer.addChunk( match.startColumn(), matchEnd, match.foreColor(),
-                                         match.backColor() );
+                                         matchBackColor );
                 }
             }
 

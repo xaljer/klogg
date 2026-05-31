@@ -36,6 +36,7 @@
  * along with klogg.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <QApplication>
 #include <QColorDialog>
 #include <QTimer>
 
@@ -55,7 +56,7 @@ static constexpr bool DEFAULT_IGNORE_CASE = false;
 static constexpr bool DEFAULT_ONLY_MATCH = false;
 
 static const QColor DEFAULT_FORE_COLOUR( "#000000" );
-static const QColor DEFAULT_BACK_COLOUR( "#FFFFFF" );
+static const QColor DEFAULT_BACK_COLOUR; // invalid = use theme background
 } // namespace
 
 // Construct the box, including a copy of the global highlighterSet
@@ -272,8 +273,10 @@ void HighlighterSetEdit::updateHighlighterProperties()
         highlighterListWidget->currentItem()->setText( currentHighlighter.pattern() );
         highlighterListWidget->currentItem()->setForeground(
             QBrush( currentHighlighter.foreColor() ) );
-        highlighterListWidget->currentItem()->setBackground(
-            QBrush( currentHighlighter.backColor() ) );
+        const auto itemBackColor = currentHighlighter.backColor().isValid()
+                                       ? currentHighlighter.backColor()
+                                       : QApplication::palette().color( QPalette::Base );
+        highlighterListWidget->currentItem()->setBackground( QBrush( itemBackColor ) );
 
         Q_EMIT changed();
     }
@@ -286,7 +289,10 @@ void HighlighterSetEdit::populateHighlighterList()
         auto* new_item = new QListWidgetItem( highlighter.pattern() );
         // new_item->setFlags( Qt::ItemIsSelectable | Qt::ItemIsEditable | Qt::ItemIsEnabled );
         new_item->setForeground( QBrush( highlighter.foreColor() ) );
-        new_item->setBackground( QBrush( highlighter.backColor() ) );
+        const auto itemBackColor = highlighter.backColor().isValid()
+                                       ? highlighter.backColor()
+                                       : QApplication::palette().color( QPalette::Base );
+        new_item->setBackground( QBrush( itemBackColor ) );
         highlighterListWidget->addItem( new_item );
     }
 }

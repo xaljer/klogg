@@ -159,6 +159,16 @@ void Highlighter::setBackColor( const QColor& backColor )
     color_.backColor = backColor;
 }
 
+bool Highlighter::useThemeBack() const
+{
+    return useThemeBack_;
+}
+
+void Highlighter::setUseThemeBack( bool useTheme )
+{
+    useThemeBack_ = useTheme;
+}
+
 std::pair<QColor, QColor> Highlighter::vairateColors( const QString& match ) const
 {
     if ( !( variateColors_ && highlightOnlyMatch_ ) ) {
@@ -332,7 +342,10 @@ void Highlighter::saveToStorage( QSettings& settings ) const
     settings.setValue( "color_variance", colorVariance_ );
     // save colors as user friendly strings in config
     settings.setValue( "fore_colour", color_.foreColor.name( QColor::HexArgb ) );
-    settings.setValue( "back_colour", color_.backColor.name( QColor::HexArgb ) );
+    settings.setValue( "back_colour", color_.backColor.isValid()
+                                          ? color_.backColor.name( QColor::HexArgb )
+                                          : QString() );
+    settings.setValue( "use_theme_back", useThemeBack_ );
 }
 
 void Highlighter::retrieveFromStorage( QSettings& settings )
@@ -347,7 +360,12 @@ void Highlighter::retrieveFromStorage( QSettings& settings )
     variateColors_ = settings.value( "variate_colors", false ).toBool();
     colorVariance_ = settings.value( "color_variance", 15 ).toInt();
     color_.foreColor = QColor( settings.value( "fore_colour" ).toString() );
-    color_.backColor = QColor( settings.value( "back_colour" ).toString() );
+    const auto backColourValue = settings.value( "back_colour" ).toString();
+    color_.backColor = backColourValue.isEmpty() ? QColor() : QColor( backColourValue );
+    useThemeBack_ = settings.value( "use_theme_back", true ).toBool();
+    if ( useThemeBack_ ) {
+        color_.backColor = QColor();
+    }
 }
 
 void HighlighterSet::saveToStorage( QSettings& settings ) const

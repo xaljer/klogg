@@ -19,6 +19,7 @@
 
 #include "highlighteredit.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
@@ -49,6 +50,8 @@ HighlighterEdit::HighlighterEdit( Highlighter defaultHighlighter, QWidget* paren
 
     connect( foreColorButton, &QPushButton::clicked, this, &HighlighterEdit::changeForeColor );
     connect( backColorButton, &QPushButton::clicked, this, &HighlighterEdit::changeBackColor );
+    connect( useThemeBackCheckBox, &QCheckBox::toggled, this,
+             &HighlighterEdit::toggleUseThemeBack );
     connect( patternTypeComboBox, QOverload<int>::of( &QComboBox::currentIndexChanged ), this,
              &HighlighterEdit::setPatternType );
 }
@@ -63,6 +66,7 @@ void HighlighterEdit::reset()
     onlyMatchCheckBox->setEnabled( false );
     foreColorButton->setEnabled( false );
     backColorButton->setEnabled( false );
+    useThemeBackCheckBox->setEnabled( false );
 
     ignoreCaseCheckBox->setChecked( defaultHighlighter_.ignoreCase() );
     onlyMatchCheckBox->setChecked( defaultHighlighter_.highlightOnlyMatch() );
@@ -71,6 +75,8 @@ void HighlighterEdit::reset()
 
     updateIcon( foreColorButton, defaultHighlighter_.foreColor() );
     updateIcon( backColorButton, defaultHighlighter_.backColor() );
+    useThemeBackCheckBox->setChecked( defaultHighlighter_.useThemeBack() );
+    backColorButton->setEnabled( !defaultHighlighter_.useThemeBack() );
 
     if ( defaultHighlighter_.useRegex() ) {
         patternTypeComboBox->setCurrentIndex( 0 );
@@ -90,13 +96,16 @@ void HighlighterEdit::setHighlighter( Highlighter highlighter )
 
     updateIcon( foreColorButton, highlighter_.foreColor() );
     updateIcon( backColorButton, highlighter_.backColor() );
+    useThemeBackCheckBox->setChecked( highlighter_.useThemeBack() );
+    backColorButton->setEnabled( !highlighter_.useThemeBack() );
 
     patternEdit->setEnabled( true );
     patternTypeComboBox->setEnabled( true );
     ignoreCaseCheckBox->setEnabled( true );
     onlyMatchCheckBox->setEnabled( true );
     foreColorButton->setEnabled( true );
-    backColorButton->setEnabled( true );
+    backColorButton->setEnabled( highlighter_.backColor().isValid() );
+    useThemeBackCheckBox->setEnabled( true );
 
     variateColorsCheckBox->setEnabled( highlighter_.highlightOnlyMatch() );
     variationSpinBox->setEnabled( highlighter_.highlightOnlyMatch() );
@@ -160,17 +169,35 @@ void HighlighterEdit::changeForeColor()
 void HighlighterEdit::changeBackColor()
 {
     QColor new_color;
-    if ( showColorPicker( highlighter_.backColor(), new_color ) ) {
+    const auto currentBackColor = highlighter_.backColor().isValid()
+                                      ? highlighter_.backColor()
+                                      : QApplication::palette().color( QPalette::Base );
+    if ( showColorPicker( currentBackColor, new_color ) ) {
         highlighter_.setBackColor( new_color );
+        highlighter_.setUseThemeBack( false );
+        useThemeBackCheckBox->setChecked( false );
+        backColorButton->setEnabled( true );
         updateIcon( backColorButton, highlighter_.backColor() );
         Q_EMIT changed();
     }
 }
 
+void HighlighterEdit::toggleUseThemeBack( bool useTheme )
+{
+    highlighter_.setUseThemeBack( useTheme );
+    if ( useTheme ) {
+        highlighter_.setBackColor( QColor() );
+    }
+    backColorButton->setEnabled( !useTheme );
+    updateIcon( backColorButton, highlighter_.backColor() );
+    Q_EMIT changed();
+}
+
 void HighlighterEdit::updateIcon( QPushButton* button, const QColor& color )
 {
+    const QColor displayColor = color.isValid() ? color : QApplication::palette().color( QPalette::Base );
     QPixmap pixmap( 20, 10 );
-    pixmap.fill( color );
+    pixmap.fill( displayColor );
     button->setIcon( QIcon( pixmap ) );
 }
 

@@ -107,6 +107,7 @@ OptionsDialog::OptionsDialog( QWidget* parent )
     setupEncodings();
     setupLanguageList();
     setupColorsTab();
+    setupRecorderTab();
 
     // Validators
     QValidator* pollingIntervalValidator = new QIntValidator( PollIntervalMin, PollIntervalMax );
@@ -418,6 +419,65 @@ void OptionsDialog::setupColorsTab()
     colorsTabLayout->addWidget( colorsScrollArea );
 
     tabWidget->addTab( colorsTab, tr( "Colors & Themes" ) );
+}
+
+void OptionsDialog::setupRecorderTab()
+{
+    auto* recorderTab = new QWidget( this );
+    auto* layout = new QVBoxLayout( recorderTab );
+
+    auto* groupBox = new QGroupBox( tr( "Recorder Commands" ), recorderTab );
+    auto* groupLayout = new QVBoxLayout( groupBox );
+
+    recorderTable_ = new QTableWidget( 0, 2, groupBox );
+    recorderTable_->setHorizontalHeaderLabels( { tr( "Name" ), tr( "Command" ) } );
+    recorderTable_->horizontalHeader()->setSectionResizeMode( QHeaderView::Stretch );
+    recorderTable_->setSelectionBehavior( QAbstractItemView::SelectRows );
+    recorderTable_->setSelectionMode( QAbstractItemView::SingleSelection );
+    recorderTable_->setEditTriggers( QAbstractItemView::DoubleClicked );
+    groupLayout->addWidget( recorderTable_ );
+
+    auto* buttonLayout = new QHBoxLayout();
+    addRecorderButton_ = new QPushButton( tr( "Add" ), groupBox );
+    editRecorderButton_ = new QPushButton( tr( "Edit" ), groupBox );
+    removeRecorderButton_ = new QPushButton( tr( "Remove" ), groupBox );
+    buttonLayout->addWidget( addRecorderButton_ );
+    buttonLayout->addWidget( editRecorderButton_ );
+    buttonLayout->addWidget( removeRecorderButton_ );
+    buttonLayout->addStretch();
+    groupLayout->addLayout( buttonLayout );
+
+    auto* helpLabel = new QLabel( tr( "Variables: {file} = current log file path" ), groupBox );
+    groupLayout->addWidget( helpLabel );
+
+    layout->addWidget( groupBox );
+    layout->addStretch();
+
+    connect( addRecorderButton_, &QPushButton::clicked, this, [ this ]() {
+        RecorderCommand cmd;
+        cmd.name = tr( "New command" );
+        auto row = recorderTable_->rowCount();
+        recorderTable_->insertRow( row );
+        recorderTable_->setItem( row, 0, new QTableWidgetItem( cmd.name ) );
+        recorderTable_->setItem( row, 1, new QTableWidgetItem( cmd.command ) );
+        recorderTable_->editItem( recorderTable_->item( row, 0 ) );
+    } );
+
+    connect( editRecorderButton_, &QPushButton::clicked, this, [ this ]() {
+        auto row = recorderTable_->currentRow();
+        if ( row >= 0 ) {
+            recorderTable_->editItem( recorderTable_->item( row, 0 ) );
+        }
+    } );
+
+    connect( removeRecorderButton_, &QPushButton::clicked, this, [ this ]() {
+        auto row = recorderTable_->currentRow();
+        if ( row >= 0 ) {
+            recorderTable_->removeRow( row );
+        }
+    } );
+
+    tabWidget->addTab( recorderTab, tr( "Recorder" ) );
 }
 
 void OptionsDialog::refreshThemeSelector()
@@ -766,6 +826,15 @@ void OptionsDialog::updateDialogFromConfig()
     filesHistoryMaxItemsSpinBox->setMinimum( 1 );
     filesHistoryMaxItemsSpinBox->setMaximum( MAX_RECENT_FILES );
     filesHistoryMaxItemsSpinBox->setValue( recentFiles.filesHistoryMaxItems() );
+
+    recorderTable_->setRowCount( 0 );
+    const auto recorderCommands = config.recorderCommands();
+    for ( const auto& cmd : recorderCommands ) {
+        auto row = recorderTable_->rowCount();
+        recorderTable_->insertRow( row );
+        recorderTable_->setItem( row, 0, new QTableWidgetItem( cmd.name ) );
+        recorderTable_->setItem( row, 1, new QTableWidgetItem( cmd.command ) );
+    }
 }
 
 //
@@ -1082,6 +1151,19 @@ void OptionsDialog::updateConfigFromDialog()
         shortcuts[ action ] = actionKeys;
     }
     config.setShortcuts( shortcuts );
+
+    QList<RecorderCommand> recorderCommands;
+    for ( auto row = 0; row < recorderTable_->rowCount(); ++row ) {
+        RecorderCommand cmd;
+        auto nameItem = recorderTable_->item( row, 0 );
+        auto cmdItem = recorderTable_->item( row, 1 );
+        if ( nameItem && cmdItem && !nameItem->text().trimmed().isEmpty() ) {
+            cmd.name = nameItem->text().trimmed();
+            cmd.command = cmdItem->text().trimmed();
+            recorderCommands.append( cmd );
+        }
+    }
+    config.setRecorderCommands( recorderCommands );
 
     // update translate when accept or apply clicked
     restartAppMessage |= oldLanguage != languageComboBox->currentData().toString();

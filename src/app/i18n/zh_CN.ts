@@ -2308,6 +2308,36 @@
         <source>Automatically detect the file&apos;s encoding</source>
         <translation>自动检测文件的编码</translation>
     </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="103"/>
+        <source>Record log...</source>
+        <translation>录制日志...</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="104"/>
+        <source>Bind a command and record log output to this file</source>
+        <translation>绑定命令并录制日志输出到此文件</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="105"/>
+        <source>Stop recording</source>
+        <translation>停止录制</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="106"/>
+        <source>Stop recording log output</source>
+        <translation>停止录制日志输出</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="107"/>
+        <source>Unbind recorder</source>
+        <translation>解绑录制器</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="108"/>
+        <source>Manage commands...</source>
+        <translation>管理命令...</translation>
+    </message>
 </context>
 <context>
     <name>klogg::mainwindow::menu</name>

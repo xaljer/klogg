@@ -56,6 +56,7 @@
 #include "pathline.h"
 #include "quickfindmux.h"
 #include "quickfindwidget.h"
+#include "recorder.h"
 #include "session.h"
 #include "signalmux.h"
 #include "tabbedcrawlerwidget.h"
@@ -222,6 +223,11 @@ class MainWindow : public QMainWindow {
     void tryOpenClipboard( int tryTimes );
     void updateShortcuts();
 
+    void updateRecordActionState();
+    void showRecordCommandMenu();
+    void unbindRecorder();
+    void bindRecorder( const QString& commandName );
+
     WindowSession session_;
     QString loadingFileName;
 
@@ -286,6 +292,7 @@ class MainWindow : public QMainWindow {
     QAction* addToFavoritesMenuAction;
     QAction* removeFromFavoritesAction;
     QAction* selectOpenFileAction;
+    QAction* recordAction;
     QAction* recentFilesCleanup;
     QActionGroup* favoritesGroup;
     QActionGroup* openedFilesGroup;
@@ -315,6 +322,11 @@ class MainWindow : public QMainWindow {
     TabbedCrawlerWidget mainTabWidget_;
 
     TabbedScratchPad scratchPad_;
+
+    RecorderManager recorderManager_;
+
+    QMap<QString, QString> recorderBindings_;
+    QString recordingFileName_;
 
     QTemporaryDir tempDir_;
 

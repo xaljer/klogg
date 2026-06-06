@@ -99,3 +99,9 @@ const char* action::predefinedFiltersDialogStatusTip
 const char* action::autoEncodingText = QT_TR_NOOP( "Auto" );
 const char* action::autoEncodingStatusTip
     = QT_TR_NOOP( "Automatically detect the file's encoding" );
+const char* action::recordText = QT_TR_NOOP( "Record log..." );
+const char* action::recordStatusTip = QT_TR_NOOP( "Bind a command and record log output to this file" );
+const char* action::stopRecordText = QT_TR_NOOP( "Stop recording" );
+const char* action::stopRecordStatusTip = QT_TR_NOOP( "Stop recording log output" );
+const char* action::unbindRecorderText = QT_TR_NOOP( "Unbind recorder" );
+const char* action::manageRecorderCommandsText = QT_TR_NOOP( "Manage commands..." );

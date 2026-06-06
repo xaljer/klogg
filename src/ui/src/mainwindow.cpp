@@ -127,6 +127,7 @@ MainWindow::MainWindow( WindowSession session )
     , signalMux_()
     , quickFindMux_( session_.getQuickFindPattern() )
     , mainTabWidget_()
+    , recorderManager_( this )
     , tempDir_( QDir::temp().filePath( "klogg_temp_" ) )
 {
     createActions();
@@ -235,6 +236,22 @@ MainWindow::MainWindow( WindowSession session )
     updateTitleBar( "" );
     loadIcons();
     reTranslateUI();
+
+    connect( &recorderManager_, &RecorderManager::recordingStarted, this,
+             [ this ]() { updateRecordActionState(); } );
+    connect( &recorderManager_, &RecorderManager::recordingStopped, this,
+             [ this ]() {
+                 recordingFileName_.clear();
+                 updateRecordActionState();
+             } );
+    connect( &recorderManager_, &RecorderManager::recordingError, this,
+             [ this ]( const QString& error ) {
+                 QMessageBox::warning( this, tr( "klogg" ),
+                                       tr( "Recorder process failed: %1" ).arg( error ) );
+             } );
+    connect( this, &MainWindow::optionsChanged, this, [ this ]() {
+        updateRecordActionState();
+    } );
 }
 
 void MainWindow::reloadGeometry()
@@ -265,6 +282,11 @@ void MainWindow::reloadSession()
                 signalCrawlerToFollowFile( crawler_widget );
             }
         }
+    }
+
+    const auto bindings = Configuration::get().recorderFileBindings();
+    for ( auto it = bindings.begin(); it != bindings.end(); ++it ) {
+        recorderBindings_[ QDir::cleanPath( it.key() ) ] = it.value();
     }
 
     if ( current_file_index >= 0 ) {
@@ -370,6 +392,9 @@ void MainWindow::reTranslateUI()
     textWrapAction->setText( transAction( action::wrapText ) );
     reloadAction->setText( transAction( action::reloadText ) );
     stopAction->setText( transAction( action::stopText ) );
+
+    recordAction->setText( transAction( action::recordText ) );
+    recordAction->setStatusTip( transAction( action::recordStatusTip ) );
 
     optionsAction->setText( transAction( action::optionsText ) );
     optionsAction->setStatusTip( transAction( action::optionsStatusTip ) );
@@ -684,6 +709,38 @@ void MainWindow::createActions()
     connect( predefinedFiltersDialogAction, &QAction::triggered, this,
              [ this ]( auto ) { this->editPredefinedFilters(); } );
 
+    recordAction = new QAction( tr( action::recordText ), this );
+    recordAction->setCheckable( true );
+    recordAction->setStatusTip( tr( action::recordStatusTip ) );
+    connect( recordAction, &QAction::triggered, this, [ this ]( auto ) {
+        auto crawler = currentCrawlerWidget();
+        if ( !crawler ) {
+            return;
+        }
+        if ( recorderManager_.isRecording() ) {
+            recorderManager_.stop();
+        }
+        else if ( !recorderManager_.boundCommandName().isEmpty() ) {
+            const auto fileName = QDir::cleanPath( session_.getFilename( crawler ) );
+            const auto commands = Configuration::get().recorderCommands();
+            const auto it = std::find_if( commands.begin(), commands.end(),
+                                          [ this ]( const auto& cmd ) {
+                                              return cmd.name
+                                                     == recorderManager_.boundCommandName();
+                                          } );
+            if ( it != commands.end() ) {
+                recordingFileName_ = fileName;
+                recorderManager_.start( fileName, it->command );
+            }
+            else {
+                showRecordCommandMenu();
+            }
+        }
+        else {
+            showRecordCommandMenu();
+        }
+    } );
+
     updateShortcuts();
 }
 
@@ -756,6 +813,7 @@ void MainWindow::loadIcons()
     showScratchPadAction->setIcon( iconLoader_.load( "icons8-create" ) );
     addToFavoritesAction->setIcon( iconLoader_.load( "icons8-star" ) );
     addToFavoritesMenuAction->setIcon( iconLoader_.load( "icons8-star" ) );
+    recordAction->setIcon( iconLoader_.load( "icons8-plus" ) );
 
     const auto& config = Configuration::get();
     const auto palette = config.themePalette( config.theme() );
@@ -920,8 +978,28 @@ void MainWindow::createToolBars()
     toolBar->addAction( reloadAction );
     toolBar->addAction( followAction );
     toolBar->addAction( addToFavoritesAction );
+    toolBar->addAction( recordAction );
     toolBar->addWidget( infoLine );
     toolBar->addAction( stopAction );
+
+    QTimer::singleShot( 0, this, [ this ]() {
+        auto btn = qobject_cast<QToolButton*>( toolBar->widgetForAction( recordAction ) );
+        if ( btn ) {
+            btn->setContextMenuPolicy( Qt::CustomContextMenu );
+            connect( btn, &QToolButton::customContextMenuRequested, this, [ this ]() {
+                if ( recorderManager_.isRecording()
+                     || recorderManager_.boundCommandName().isEmpty() ) {
+                    return;
+                }
+                QMenu menu;
+                auto unbindAction = menu.addAction(
+                    tr( klogg::mainwindow::action::unbindRecorderText ) );
+                connect( unbindAction, &QAction::triggered, this,
+                         [ this ]() { unbindRecorder(); } );
+                menu.exec( QCursor::pos() );
+            } );
+        }
+    } );
 
     infoToolbarSeparators.reserve( 5 );
     infoToolbarSeparators.push_back( toolBar->addSeparator() );
@@ -1500,6 +1578,11 @@ void MainWindow::closeTab( int index, ActionInitiator initiator )
 
     assert( widget );
 
+    if ( recorderManager_.isRecording()
+         && session_.getFilename( widget ) == recordingFileName_ ) {
+        recorderManager_.stop();
+    }
+
     widget->stopLoading();
     mainTabWidget_.removeCrawler( index );
 
@@ -1535,6 +1618,8 @@ void MainWindow::currentTabChanged( int index )
         updateFavoritesMenu();
 
         editMenu->setEnabled( true );
+
+        updateRecordActionState();
     }
     else {
         // No tab left
@@ -1550,6 +1635,7 @@ void MainWindow::currentTabChanged( int index )
         editMenu->setEnabled( false );
         addToFavoritesAction->setEnabled( false );
         addToFavoritesMenuAction->setEnabled( false );
+        recordAction->setEnabled( false );
     }
 }
 
@@ -2330,4 +2416,145 @@ void MainWindow::generateDump()
     if ( userAction == QMessageBox::Yes ) {
         throw std::logic_error( "test dump" );
     }
+}
+
+void MainWindow::updateRecordActionState()
+{
+    using namespace klogg::mainwindow;
+
+    auto crawler = currentCrawlerWidget();
+    if ( !crawler ) {
+        recordAction->setEnabled( false );
+        recorderManager_.setBoundCommandName( {} );
+        return;
+    }
+
+    if ( recorderManager_.isRecording() ) {
+        recordAction->setText( tr( "Stop: %1" ).arg(
+            QFileInfo( recordingFileName_ ).fileName() ) );
+        recordAction->setStatusTip( tr( action::stopRecordStatusTip ) );
+        recordAction->setIcon( style()->standardIcon( QStyle::SP_MediaStop ) );
+        recordAction->setChecked( true );
+        recordAction->setEnabled( true );
+        return;
+    }
+
+    recordAction->setChecked( false );
+
+    const auto fileName = QDir::cleanPath( session_.getFilename( crawler ) );
+    auto boundCommand = recorderBindings_.value( fileName );
+
+    LOG_INFO << "updateRecordActionState: file=" << fileName
+             << " inMap=" << ( !boundCommand.isEmpty() );
+
+    if ( boundCommand.isEmpty() ) {
+        boundCommand = Configuration::get().recorderFileBindings().value( fileName );
+        LOG_INFO << "updateRecordActionState: from Configuration="
+                 << ( !boundCommand.isEmpty() );
+        if ( !boundCommand.isEmpty() ) {
+            recorderBindings_[ fileName ] = boundCommand;
+        }
+    }
+
+    recorderManager_.setBoundCommandName( boundCommand );
+
+    if ( !boundCommand.isEmpty() ) {
+        auto& config = Configuration::get();
+        const auto commands = config.recorderCommands();
+        const auto exists = std::any_of( commands.begin(), commands.end(),
+                                         [ &boundCommand ]( const auto& cmd ) {
+                                             return cmd.name == boundCommand;
+                                         } );
+        if ( !exists ) {
+            recorderBindings_.remove( fileName );
+            recorderManager_.setBoundCommandName( {} );
+            boundCommand.clear();
+
+            config.removeRecorderFileBinding( fileName );
+            config.save();
+        }
+    }
+
+    if ( boundCommand.isEmpty() ) {
+        recordAction->setText( tr( action::recordText ) );
+        recordAction->setStatusTip( tr( action::recordStatusTip ) );
+        recordAction->setIcon( iconLoader_.load( "icons8-plus" ) );
+    }
+    else {
+        recordAction->setText( tr( "Record: %1" ).arg( boundCommand ) );
+        recordAction->setStatusTip( tr( "Record log output using %1" ).arg( boundCommand ) );
+        recordAction->setIcon( style()->standardIcon( QStyle::SP_MediaPlay ) );
+    }
+
+    recordAction->setEnabled( true );
+}
+
+void MainWindow::showRecordCommandMenu()
+{
+    const auto& config = Configuration::get();
+    const auto commands = config.recorderCommands();
+
+    QMenu menu;
+    for ( const auto& cmd : commands ) {
+        auto action = menu.addAction( cmd.name );
+        connect( action, &QAction::triggered, this,
+                 [ this, name = cmd.name ]() {
+                     bindRecorder( name );
+                     updateRecordActionState();
+                 } );
+    }
+
+    if ( !commands.isEmpty() ) {
+        menu.addSeparator();
+    }
+
+    auto manageAction = menu.addAction(
+        tr( klogg::mainwindow::action::manageRecorderCommandsText ) );
+    connect( manageAction, &QAction::triggered, this, [ this ]() { options(); } );
+
+    auto button = qobject_cast<QToolButton*>(
+        toolBar->widgetForAction( recordAction ) );
+    if ( button ) {
+        menu.exec( button->mapToGlobal( QPoint( 0, button->height() ) ) );
+    }
+    else {
+        menu.exec( QCursor::pos() );
+    }
+}
+
+void MainWindow::bindRecorder( const QString& commandName )
+{
+    auto crawler = currentCrawlerWidget();
+    if ( !crawler ) {
+        return;
+    }
+
+    const auto fileName = QDir::cleanPath( session_.getFilename( crawler ) );
+
+    recorderBindings_[ fileName ] = commandName;
+
+    auto& config = Configuration::get();
+    config.setRecorderFileBinding( fileName, commandName );
+    config.save();
+}
+
+void MainWindow::unbindRecorder()
+{
+    if ( recorderManager_.isRecording() ) {
+        return;
+    }
+
+    auto crawler = currentCrawlerWidget();
+    if ( !crawler ) {
+        return;
+    }
+
+    const auto fileName = QDir::cleanPath( session_.getFilename( crawler ) );
+
+    recorderBindings_.remove( fileName );
+
+    auto& config = Configuration::get();
+    config.removeRecorderFileBinding( fileName );
+    config.save();
+    updateRecordActionState();
 }

@@ -432,6 +432,29 @@ void Configuration::retrieveFromStorage( QSettings& settings )
     if ( settings.childGroups().contains( "dark" ) ) {
         settings.remove( "dark" );
     }
+
+    recorderCommands_.clear();
+    const auto recorderCount = settings.beginReadArray( "recorderCommands" );
+    for ( auto i = 0; i < recorderCount; ++i ) {
+        settings.setArrayIndex( static_cast<int>( i ) );
+        RecorderCommand cmd;
+        cmd.name = settings.value( "name" ).toString();
+        cmd.command = settings.value( "command" ).toString();
+        recorderCommands_.append( cmd );
+    }
+    settings.endArray();
+
+    recorderFileBindings_.clear();
+    const auto bindingsCount = settings.beginReadArray( "recorderFileBindings" );
+    for ( auto i = 0; i < bindingsCount; ++i ) {
+        settings.setArrayIndex( static_cast<int>( i ) );
+        const auto filePath = settings.value( "file" ).toString();
+        const auto commandName = settings.value( "command" ).toString();
+        if ( !filePath.isEmpty() ) {
+            recorderFileBindings_[ filePath ] = commandName;
+        }
+    }
+    settings.endArray();
 }
 
 void Configuration::saveToStorage( QSettings& settings ) const
@@ -537,4 +560,22 @@ void Configuration::saveToStorage( QSettings& settings ) const
     }
 
     settings.remove( "dark" );
+
+    settings.beginWriteArray( "recorderCommands" );
+    for ( auto i = 0; i < recorderCommands_.size(); ++i ) {
+        settings.setArrayIndex( i );
+        settings.setValue( "name", recorderCommands_.at( i ).name );
+        settings.setValue( "command", recorderCommands_.at( i ).command );
+    }
+    settings.endArray();
+
+    settings.beginWriteArray( "recorderFileBindings" );
+    auto bindingIndex = 0;
+    for ( auto it = recorderFileBindings_.begin(); it != recorderFileBindings_.end();
+          ++it, ++bindingIndex ) {
+        settings.setArrayIndex( bindingIndex );
+        settings.setValue( "file", it.key() );
+        settings.setValue( "command", it.value() );
+    }
+    settings.endArray();
 }

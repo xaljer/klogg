@@ -2308,6 +2308,36 @@
         <source>Automatically detect the file&apos;s encoding</source>
         <translation>Automatically detect the file&apos;s encoding</translation>
     </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="103"/>
+        <source>Record log...</source>
+        <translation>Record log...</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="104"/>
+        <source>Bind a command and record log output to this file</source>
+        <translation>Bind a command and record log output to this file</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="105"/>
+        <source>Stop recording</source>
+        <translation>Stop recording</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="106"/>
+        <source>Stop recording log output</source>
+        <translation>Stop recording log output</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="107"/>
+        <source>Unbind recorder</source>
+        <translation>Unbind recorder</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="108"/>
+        <source>Manage commands...</source>
+        <translation>Manage commands...</translation>
+    </message>
 </context>
 <context>
     <name>klogg::mainwindow::menu</name>

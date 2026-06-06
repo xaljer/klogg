@@ -1,3 +1,9 @@
+if(WIN32)
+  set(KLOGG_SHELLPROCESS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/shellprocess_win.cpp)
+else()
+  set(KLOGG_SHELLPROCESS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/shellprocess_unix.cpp)
+endif()
+
 add_library(
   klogg_ui STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include/abstractlogview.h
@@ -28,10 +34,12 @@ add_library(
   ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindpattern.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindwidget.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/recentfiles.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/recorder.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/savedsearches.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/selection.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/session.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/sessioninfo.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/shellprocess.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/signalmux.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/tabbedcrawlerwidget.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/viewinterface.h
@@ -78,10 +86,12 @@ add_library(
   ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindpattern.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindwidget.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/recentfiles.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/recorder.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/savedsearches.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/selection.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/session.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/sessioninfo.cpp
+  ${KLOGG_SHELLPROCESS_SRC}
   ${CMAKE_CURRENT_SOURCE_DIR}/src/signalmux.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tabbedcrawlerwidget.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/viewtools.cpp

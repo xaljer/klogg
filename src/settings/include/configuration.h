@@ -60,6 +60,11 @@ enum class SearchRegexpType {
 enum class RegexpEngine { Hyperscan, QRegularExpression };
 static constexpr int MAX_RECENT_FILES = 25;
 
+struct RecorderCommand {
+    QString name;
+    QString command;
+};
+
 // Configuration class containing everything in the "Settings" dialog
 class Configuration final : public Persistable<Configuration> {
   public:
@@ -564,6 +569,28 @@ class Configuration final : public Persistable<Configuration> {
         hideAnsiColorSequences_ = hide;
     }
 
+    QList<RecorderCommand> recorderCommands() const
+    {
+        return recorderCommands_;
+    }
+    void setRecorderCommands( const QList<RecorderCommand>& commands )
+    {
+        recorderCommands_ = commands;
+    }
+
+    QMap<QString, QString> recorderFileBindings() const
+    {
+        return recorderFileBindings_;
+    }
+    void setRecorderFileBinding( const QString& filePath, const QString& commandName )
+    {
+        recorderFileBindings_[ filePath ] = commandName;
+    }
+    void removeRecorderFileBinding( const QString& filePath )
+    {
+        recorderFileBindings_.remove( filePath );
+    }
+
     int defaultEncodingMib() const
     {
         return defaultEncodingMib_;
@@ -708,6 +735,9 @@ class Configuration final : public Persistable<Configuration> {
     std::map<std::string, QStringList> shortcuts_;
 
     std::map<QString, std::map<QString, QString>> themePalettes_ = {};
+
+    QList<RecorderCommand> recorderCommands_ = {};
+    QMap<QString, QString> recorderFileBindings_ = {};
 };
 
 #endif

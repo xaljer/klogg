@@ -46,6 +46,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QComboBox>
+#include <QTableWidget>
 #include <map>
 
 #include "configuration.h"
@@ -110,6 +111,7 @@ class OptionsDialog : public QDialog, public Ui::OptionsDialog {
     void setupEncodings();
     void setupLanguageList();
     void setupColorsTab();
+    void setupRecorderTab();
     void refreshThemeSelector();
     void applyThemePaletteToButtons( const QString& themeName );
     void applySearchColorsFromTheme( const QString& themeName );
@@ -138,6 +140,10 @@ class OptionsDialog : public QDialog, public Ui::OptionsDialog {
     QComboBox* themeComboBox_ = nullptr;
     QPushButton* resetThemeButton_ = nullptr;
     QPushButton* cloneThemeButton_ = nullptr;
+    QTableWidget* recorderTable_ = nullptr;
+    QPushButton* addRecorderButton_ = nullptr;
+    QPushButton* editRecorderButton_ = nullptr;
+    QPushButton* removeRecorderButton_ = nullptr;
 };
 
 #endif

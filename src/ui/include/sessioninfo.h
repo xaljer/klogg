@@ -57,10 +57,12 @@ class SessionInfo : public Persistable<SessionInfo, session_settings> {
     }
 
     struct OpenFile {
-        OpenFile( const QString& file, uint64_t top, const QString& context )
+        OpenFile( const QString& file, uint64_t top, const QString& context,
+                  const QString& cmdName = {} )
             : fileName{ file }
             , topLine{ top }
             , viewContext{ context }
+            , recorderCommandName{ cmdName }
         {
         }
 
@@ -70,6 +72,8 @@ class SessionInfo : public Persistable<SessionInfo, session_settings> {
         // The view context contains parameter specific to the view's
         // implementation (such as geometry...)
         QString viewContext;
+
+        QString recorderCommandName;
     };
 
     struct Window {
@@ -145,6 +149,19 @@ class SessionInfo : public Persistable<SessionInfo, session_settings> {
         }
     }
 
+    QMap<QString, QString> recorderBindings() const
+    {
+        return recorderBindings_;
+    }
+    void setRecorderBinding( const QString& filePath, const QString& commandName )
+    {
+        recorderBindings_[ filePath ] = commandName;
+    }
+    void removeRecorderBinding( const QString& filePath )
+    {
+        recorderBindings_.remove( filePath );
+    }
+
     // Reads/writes the current config in the QSettings object passed
     void saveToStorage( QSettings& settings ) const;
     void retrieveFromStorage( QSettings& settings );
@@ -166,6 +183,7 @@ class SessionInfo : public Persistable<SessionInfo, session_settings> {
 
   private:
     mutable std::vector<Window> windows_;
+    mutable QMap<QString, QString> recorderBindings_;
 };
 
 #endif

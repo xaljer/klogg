@@ -51,7 +51,10 @@ void SessionInfo::retrieveFromStorage( QSettings& settings )
                         QString file_name = settings.value( "fileName" ).toString();
                         uint64_t top_line = settings.value( "topLine" ).toULongLong();
                         QString view_context = settings.value( "viewContext" ).toString();
-                        window.openFiles.emplace_back( file_name, top_line, view_context );
+                        QString recorderCommandName
+                            = settings.value( "recorderCommandName" ).toString();
+                        window.openFiles.emplace_back( file_name, top_line, view_context,
+                                                       recorderCommandName );
                     }
                     settings.endArray();
                 }
@@ -99,10 +102,22 @@ void SessionInfo::saveToStorage( QSettings& settings ) const
             settings.setValue( "fileName", open_file->fileName );
             settings.setValue( "topLine", qint64( open_file->topLine ) );
             settings.setValue( "viewContext", open_file->viewContext );
+            settings.setValue( "recorderCommandName", open_file->recorderCommandName );
         }
         settings.endArray();
         settings.endGroup(); // OpenFiles
     }
     settings.endArray();
-    settings.endGroup(); // Win
+    settings.endGroup(); // Window
+
+    settings.beginWriteArray( "recorderBindings" );
+    auto bindingIndex = 0;
+    for ( auto it = recorderBindings_.begin(); it != recorderBindings_.end(); ++it, ++bindingIndex ) {
+        settings.setArrayIndex( bindingIndex );
+        settings.setValue( "file", it.key() );
+        settings.setValue( "command", it.value() );
+    }
+    settings.endArray();
+    settings.sync();
 }
+

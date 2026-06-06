@@ -92,6 +92,12 @@ extern const char* predefinedFiltersDialogText;
 extern const char* predefinedFiltersDialogStatusTip;
 extern const char* autoEncodingText;
 extern const char* autoEncodingStatusTip;
+extern const char* recordText;
+extern const char* recordStatusTip;
+extern const char* stopRecordText;
+extern const char* stopRecordStatusTip;
+extern const char* unbindRecorderText;
+extern const char* manageRecorderCommandsText;
 } // namespace action
 
 } // namespace mainwindow

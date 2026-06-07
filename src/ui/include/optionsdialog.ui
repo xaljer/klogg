@@ -426,19 +426,39 @@
           <string>Miscellaneous</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_6">
-          <item>
-           <widget class="QCheckBox" name="hideAnsiColorsCheckBox">
-            <property name="enabled">
-             <bool>true</bool>
-            </property>
-            <property name="text">
-             <string>Hide ANSI Colors (search performance will be reduced)</string>
-            </property>
-            <property name="checked">
-             <bool>false</bool>
-            </property>
-           </widget>
-          </item>
+           <item>
+            <widget class="QGroupBox" name="ansiProcessingGroupBox">
+             <property name="title">
+              <string>ANSI Escape Sequences</string>
+             </property>
+             <layout class="QVBoxLayout" name="ansiLayout">
+              <item>
+               <widget class="QRadioButton" name="ansiNoneRadioButton">
+                <property name="text">
+                 <string>Do not process (show raw codes)</string>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QRadioButton" name="ansiStripOnlyRadioButton">
+                <property name="text">
+                 <string>Strip escape sequences</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QRadioButton" name="ansiRenderColorsRadioButton">
+                <property name="text">
+                 <string>Render foreground colors</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
          </layout>
         </widget>
        </item>

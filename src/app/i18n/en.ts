@@ -1090,9 +1090,24 @@
         <translation>Miscellaneous</translation>
     </message>
     <message>
-        <location filename="../../ui/include/optionsdialog.ui" line="404"/>
-        <source>Hide ANSI Colors (search performance will be reduced)</source>
-        <translation>Hide ANSI Colors (search performance will be reduced)</translation>
+        <location filename="../../ui/include/optionsdialog.ui" line="430"/>
+        <source>ANSI Escape Sequences</source>
+        <translation>ANSI Escape Sequences</translation>
+    </message>
+    <message>
+        <location filename="../../ui/include/optionsdialog.ui" line="437"/>
+        <source>Do not process (show raw codes)</source>
+        <translation>Do not process (show raw codes)</translation>
+    </message>
+    <message>
+        <location filename="../../ui/include/optionsdialog.ui" line="444"/>
+        <source>Strip escape sequences</source>
+        <translation>Strip escape sequences</translation>
+    </message>
+    <message>
+        <location filename="../../ui/include/optionsdialog.ui" line="451"/>
+        <source>Render foreground colors</source>
+        <translation>Render foreground colors</translation>
     </message>
     <message>
         <location filename="../../ui/include/optionsdialog.ui" line="431"/>

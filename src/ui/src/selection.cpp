@@ -26,6 +26,8 @@
 #include <numeric>
 
 #include "abstractlogdata.h"
+#include "ansi_parser.h"
+#include "configuration.h"
 #include "containers.h"
 #include "linetypes.h"
 #include "log.h"
@@ -199,9 +201,13 @@ Selection::getSelectionWithLineNumbers( const AbstractLogData* logData ) const
                                logData->getLineString( *selectedLine_ ) );
     }
     else if ( selectedPartial_.line.has_value() ) {
+        auto expandedLine
+            = logData->getExpandedLineString( *selectedPartial_.line );
+        const auto ansiResult = AnsiSgrParser::parseLine(
+            expandedLine, AnsiProcessing::StripOnly, QColor(), QColor() );
         selectionData.emplace(
             logData->getLineNumber( selectedPartial_.line.value() ),
-            logData->getExpandedLineString( *selectedPartial_.line )
+            std::move( ansiResult.cleanText )
                 .mid( selectedPartial_.startColumn.get(),
                       selectedPartial_.size().get() ) );
     }

@@ -125,6 +125,7 @@ target_link_libraries(
   PUBLIC project_options
          project_warnings
          klogg_logdata
+         klogg_ansi
          klogg_versioncheck
          klogg_karchive
          Qt${QT_VERSION_MAJOR}::Widgets

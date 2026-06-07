@@ -1090,9 +1090,24 @@
         <translation type="unfinished">其他</translation>
     </message>
     <message>
-        <location filename="../../ui/include/optionsdialog.ui" line="404"/>
-        <source>Hide ANSI Colors (search performance will be reduced)</source>
-        <translation type="unfinished">隐藏ANSI颜色（搜索性能会降低）</translation>
+        <location filename="../../ui/include/optionsdialog.ui" line="430"/>
+        <source>ANSI Escape Sequences</source>
+        <translation type="unfinished">ANSI 转义序列</translation>
+    </message>
+    <message>
+        <location filename="../../ui/include/optionsdialog.ui" line="437"/>
+        <source>Do not process (show raw codes)</source>
+        <translation type="unfinished">不做处理（显示原始字符）</translation>
+    </message>
+    <message>
+        <location filename="../../ui/include/optionsdialog.ui" line="444"/>
+        <source>Strip escape sequences</source>
+        <translation type="unfinished">去除转义序列</translation>
+    </message>
+    <message>
+        <location filename="../../ui/include/optionsdialog.ui" line="451"/>
+        <source>Render foreground colors</source>
+        <translation type="unfinished">渲染前景色</translation>
     </message>
     <message>
         <location filename="../../ui/include/optionsdialog.ui" line="431"/>

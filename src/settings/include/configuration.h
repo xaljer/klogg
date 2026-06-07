@@ -58,6 +58,12 @@ enum class SearchRegexpType {
 };
 
 enum class RegexpEngine { Hyperscan, QRegularExpression };
+
+enum class AnsiProcessing {
+    None = 0,
+    StripOnly = 1,
+    RenderColors = 2,
+};
 static constexpr int MAX_RECENT_FILES = 25;
 
 struct RecorderCommand {
@@ -560,13 +566,13 @@ class Configuration final : public Persistable<Configuration> {
         optimizeForNotLatinEncodings_ = enable;
     }
 
-    bool hideAnsiColorSequences() const
+    AnsiProcessing ansiProcessing() const
     {
-        return hideAnsiColorSequences_;
+        return ansiProcessing_;
     }
-    void setHideAnsiColorSequences( bool hide )
+    void setAnsiProcessing( AnsiProcessing mode )
     {
-        hideAnsiColorSequences_ = hide;
+        ansiProcessing_ = mode;
     }
 
     QList<RecorderCommand> recorderCommands() const
@@ -722,7 +728,7 @@ class Configuration final : public Persistable<Configuration> {
 
     bool optimizeForNotLatinEncodings_ = false;
 
-    bool hideAnsiColorSequences_ = false;
+    AnsiProcessing ansiProcessing_ = AnsiProcessing::None;
 
     int defaultEncodingMib_ = -1;
 

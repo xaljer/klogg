@@ -732,7 +732,17 @@ void OptionsDialog::updateDialogFromConfig()
     }
     languageComboBox->setCurrentIndex( langIdx );
 
-    hideAnsiColorsCheckBox->setChecked( config.hideAnsiColorSequences() );
+    switch ( config.ansiProcessing() ) {
+    case AnsiProcessing::None:
+        ansiNoneRadioButton->setChecked( true );
+        break;
+    case AnsiProcessing::StripOnly:
+        ansiStripOnlyRadioButton->setChecked( true );
+        break;
+    case AnsiProcessing::RenderColors:
+        ansiRenderColorsRadioButton->setChecked( true );
+        break;
+    }
 
     // Regexp types
     mainSearchBox->setCurrentIndex( getRegexpTypeIndex( config.mainRegexpType() ) );
@@ -1130,7 +1140,15 @@ void OptionsDialog::updateConfigFromDialog()
         ThemeManager::applyTheme( config.theme() );
     }
 
-    config.setHideAnsiColorSequences( hideAnsiColorsCheckBox->isChecked() );
+    if ( ansiStripOnlyRadioButton->isChecked() ) {
+        config.setAnsiProcessing( AnsiProcessing::StripOnly );
+    }
+    else if ( ansiRenderColorsRadioButton->isChecked() ) {
+        config.setAnsiProcessing( AnsiProcessing::RenderColors );
+    }
+    else {
+        config.setAnsiProcessing( AnsiProcessing::None );
+    }
 
     config.setDefaultEncodingMib( encodingComboBox->currentData().toInt() );
 

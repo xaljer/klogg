@@ -298,10 +298,19 @@ void Configuration::retrieveFromStorage( QSettings& settings )
     minimizeToTray_
         = settings.value( "view.minimizeToTray", DefaultConfiguration.minimizeToTray_ ).toBool();
 
-    hideAnsiColorSequences_
-        = settings
-              .value( "view.hideAnsiColorSequences", DefaultConfiguration.hideAnsiColorSequences_ )
-              .toBool();
+    if ( settings.contains( "view.ansiProcessing" ) ) {
+        ansiProcessing_
+            = static_cast<AnsiProcessing>(
+                  settings.value( "view.ansiProcessing" ).toInt() );
+    }
+    else {
+        const bool oldHide
+            = settings
+                  .value( "view.hideAnsiColorSequences",
+                          static_cast<bool>( DefaultConfiguration.ansiProcessing_ == AnsiProcessing::StripOnly ) )
+                  .toBool();
+        ansiProcessing_ = oldHide ? AnsiProcessing::StripOnly : AnsiProcessing::None;
+    }
 
     useTextWrap_ = settings.value( "view.textWrap", DefaultConfiguration.useTextWrap() ).toBool();
     chipMode_
@@ -526,7 +535,7 @@ void Configuration::saveToStorage( QSettings& settings ) const
     settings.setValue( "view.qtHiDpi", enableQtHighDpi_ );
     settings.setValue( "view.scaleFactorRounding", scaleFactorRounding_ );
 
-    settings.setValue( "view.hideAnsiColorSequences", hideAnsiColorSequences_ );
+    settings.setValue( "view.ansiProcessing", static_cast<int>( ansiProcessing_ ) );
 
     settings.setValue( "defaultView.searchAutoRefresh", searchAutoRefresh_ );
     settings.setValue( "defaultView.searchIgnoreCase", searchIgnoreCase_ );

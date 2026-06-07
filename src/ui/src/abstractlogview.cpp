@@ -86,6 +86,7 @@
 #include "active_screen.h"
 #include "clipboard.h"
 #include "configuration.h"
+#include "ansi_parser.h"
 #include "highlighterset.h"
 #include "highlightersmenu.h"
 #include "log.h"
@@ -1952,7 +1953,11 @@ void AbstractLogView::jumpToBottom()
 // Select the word under the given position
 void AbstractLogView::selectWordAtPosition( const FilePosition& pos )
 {
-    const QString line = logData_->getExpandedLineString( pos.line() );
+    const QString rawLine = logData_->getExpandedLineString( pos.line() );
+
+    const auto ansiResult = AnsiSgrParser::parseLine( rawLine, AnsiProcessing::StripOnly,
+                                                       QColor(), QColor() );
+    const QString& line = ansiResult.cleanText;
 
     const int clickPos = type_safe::narrow_cast<int>( pos.column().get() );
 
@@ -2203,6 +2208,12 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
     // LOG_DEBUG << "pixmap size: " << textPixmap.width();
     // Repaint the viewport
     auto painter = pixmapPainter( paintDevice, this->font() );
+
+#ifdef KLOGG_PERF_MEASURE_ANSI
+    int ansiLinesProcessed = 0;
+    int ansiLinesWithCodes = 0;
+    std::chrono::microseconds ansiParseTime{ 0 };
+#endif
     // LOG_DEBUG << "font: " << viewport()->font().family().toStdString();
     // LOG_DEBUG << "font painter: " << painter->font().family().toStdString();
 
@@ -2368,10 +2379,29 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
 
         const int xPos = contentStartPosX + ContentMarginWidth;
 
-        HighlightedMatchRanges highlighterMatches;
+        auto expandedLine = untabify( std::move( logLine ) );
+
+        const auto ansiMode = Configuration::get().ansiProcessing();
+        AnsiParseResult ansiResult;
+#ifdef KLOGG_PERF_MEASURE_ANSI
+        const auto ansiT0 = std::chrono::steady_clock::now();
+#endif
+        if ( ansiMode != AnsiProcessing::None && expandedLine.contains( QChar( 0x1B ) ) ) {
+            ansiResult = AnsiSgrParser::parseLine( expandedLine, ansiMode, foreColor, backColor );
+            expandedLine = ansiResult.cleanText;
+        }
+#ifdef KLOGG_PERF_MEASURE_ANSI
+        const auto ansiT1 = std::chrono::steady_clock::now();
+        ansiParseTime += std::chrono::duration_cast<std::chrono::microseconds>( ansiT1 - ansiT0 );
+        ++ansiLinesProcessed;
+        if ( !ansiResult.segments.empty() && ansiMode == AnsiProcessing::RenderColors ) {
+            ++ansiLinesWithCodes;
+        }
+#endif
+
+        HighlightedMatchRanges allHighlights;
 
         if ( selection_.isLineSelected( lineNumber ) && !selection_.isSingleLine() ) {
-            // Reverse the selected line
             foreColor = palette.color( QPalette::HighlightedText );
             backColor = palette.color( QPalette::Highlight );
             painter->setPen( palette.color( QPalette::Text ) );
@@ -2384,75 +2414,50 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
                 foreColor = palette.brush( QPalette::Disabled, QPalette::Text ).color();
             }
             else {
-                const auto highlightType = highlighterSet.matchLine( logLine, highlighterMatches );
+                const auto highlightType
+                    = highlighterSet.matchLine( expandedLine, allHighlights );
 
                 if ( highlightType == HighlighterMatchType::LineMatch ) {
-                    foreColor = highlighterMatches.front().foreColor();
-                    const auto hBackColor = highlighterMatches.front().backColor();
+                    foreColor = allHighlights.front().foreColor();
+                    const auto hBackColor = allHighlights.front().backColor();
                     backColor = hBackColor.isValid() ? hBackColor : backColor;
                 }
-
-                if ( patternHighlight ) {
-                    klogg::vector<HighlightedMatch> patternMatches;
-                    patternHighlight->matchLine( logLine, patternMatches );
-                    highlighterMatches.addMatches( patternMatches );
-                }
-
-                // highlighterMatches.reserve( additionalHighlighters.size() );
-                for ( const auto& highlighter : additionalHighlighters ) {
-                    klogg::vector<HighlightedMatch> patternMatches;
-                    highlighter.matchLine( logLine, patternMatches );
-                    highlighterMatches.addMatches( patternMatches );
-                }
             }
-        }
 
-        const auto untabifyHighlight = [ &logLine ]( const auto& match ) {
-            const auto prefix = QStringView{ logLine }.left( match.startColumn().get() );
-            const auto matchPart
-                = QStringView{ logLine }.mid( match.startColumn().get(), match.size().get() );
-            const auto expandedPrefixLength = untabify( prefix.toString() ).size();
-            const LineLength startDelta
-                = LineLength{ type_safe::narrow_cast<LineLength::UnderlyingType>(
-                    expandedPrefixLength - prefix.size() ) };
+            if ( ansiMode == AnsiProcessing::RenderColors && !ansiResult.segments.empty() ) {
+                klogg::vector<HighlightedMatch> ansiMatches;
+                ansiMatches.reserve( ansiResult.segments.size() );
+                for ( const auto& seg : ansiResult.segments ) {
+                    ansiMatches.emplace_back( LineColumn{ seg.startColumn },
+                                              LineLength{ seg.length }, seg.foreColor, QColor() );
+                }
+                allHighlights.addMatches( ansiMatches );
+            }
 
-            const LineLength expandedMatchLength = LineLength{
-                untabify( matchPart.toString(),
-                          LineColumn{ type_safe::narrow_cast<LineColumn::UnderlyingType>(
-                              expandedPrefixLength ) } )
-                    .size()
-            };
+            if ( !( lineNumber < searchStartIndex || lineNumber >= searchEndIndex )
+                 && patternHighlight ) {
+                klogg::vector<HighlightedMatch> patternMatches;
+                patternHighlight->matchLine( expandedLine, patternMatches );
+                allHighlights.addMatches( patternMatches );
+            }
 
-            const auto lengthDelta
-                = expandedMatchLength
-                  - LineLength{ type_safe::narrow_cast<LineLength::UnderlyingType>(
-                      matchPart.size() ) };
+            for ( const auto& highlighter : additionalHighlighters ) {
+                klogg::vector<HighlightedMatch> colorLabelMatches;
+                highlighter.matchLine( expandedLine, colorLabelMatches );
+                allHighlights.addMatches( colorLabelMatches );
+            }
 
-            return HighlightedMatch{ match.startColumn() + startDelta, match.size() + lengthDelta,
-                                     match.foreColor(), match.backColor() };
-        };
+            klogg::vector<HighlightedMatch> quickFindMatches;
+            quickFindPattern_->matchLine( expandedLine, quickFindMatches );
+            allHighlights.addMatches( quickFindMatches );
 
-        klogg::vector<HighlightedMatch> sortedHighlights = highlighterMatches.matches();
-        std::transform( sortedHighlights.begin(), sortedHighlights.end(), sortedHighlights.begin(),
-                        untabifyHighlight );
-
-        HighlightedMatchRanges allHighlights{ std::move( sortedHighlights ) };
-
-        // string to print, cut to fit the length and position of the view
-        const QString& expandedLine = untabify( std::move( logLine ) );
-
-        // Has the line got elements to be highlighted
-        klogg::vector<HighlightedMatch> quickFindMatches;
-        quickFindPattern_->matchLine( expandedLine, quickFindMatches );
-        allHighlights.addMatches( quickFindMatches );
-
-        // Is there something selected in the line?
-        const auto selectionPortion = selection_.getPortionForLine( lineNumber );
-        if ( selectionPortion.isValid() ) {
-            allHighlights.addMatch( HighlightedMatch{ selectionPortion.startColumn(),
-                                                      selectionPortion.size(),
-                                                      palette.color( QPalette::HighlightedText ),
-                                                      palette.color( QPalette::Highlight ) } );
+            const auto selectionPortion = selection_.getPortionForLine( lineNumber );
+            if ( selectionPortion.isValid() ) {
+                allHighlights.addMatch(
+                    HighlightedMatch{ selectionPortion.startColumn(), selectionPortion.size(),
+                                      palette.color( QPalette::HighlightedText ),
+                                      palette.color( QPalette::Highlight ) } );
+            }
         }
 
         const auto wrappedLineLength
@@ -2460,7 +2465,6 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
         const WrappedString wrappedLineView{ expandedLine, wrappedLineLength };
         const auto finalLineHeight
             = fontHeight * static_cast<int>( wrappedLineView.wrappedLinesCount() );
-        // LOG_INFO << "Draw line " << lineNumber << ": " << expandedLine;
 
         painter->fillRect( xPos - ContentMarginWidth, yPos, viewport()->width(), finalLineHeight,
                            backColor );
@@ -2473,7 +2477,6 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
         allHighlights.clamp( firstVisibleColumn, lastVisibleColumn );
 
         if ( !allHighlights.empty() && !expandedLine.isEmpty() ) {
-            // first part without highlight
             if ( allHighlights.front().startColumn() > firstVisibleColumn ) {
                 lineDrawer.addChunk( firstVisibleColumn,
                                      allHighlights.front().startColumn() - 1_length, foreColor,
@@ -2483,7 +2486,6 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
             for ( const auto& match : allHighlights.matches() ) {
                 const auto matchStart = match.startColumn();
 
-                // a part between two highlight regions
                 if ( !lineDrawer.empty() && matchStart - lineDrawer.endColumn() > 1_length ) {
                     lineDrawer.addChunk( lineDrawer.endColumn() + 1_length, matchStart - 1_length,
                                          foreColor, backColor );
@@ -2503,7 +2505,6 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
                 }
             }
 
-            // last part without highlight
             const auto lastHighlightColumn = allHighlights.back().endColumn();
             if ( lastHighlightColumn < lastVisibleColumn ) {
                 lineDrawer.addChunk( lastHighlightColumn + 1_length, lastVisibleColumn, foreColor,
@@ -2587,6 +2588,14 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
             break;
         }
     } // For each line
+
+#ifdef KLOGG_PERF_MEASURE_ANSI
+    if ( ansiLinesProcessed > 0 ) {
+        LOG_WARNING << "ANSI parse: " << ansiParseTime.count() << "us for "
+                    << ansiLinesProcessed << " lines (" << ansiLinesWithCodes
+                    << " with codes)";
+    }
+#endif
 }
 
 // Draw the "pull to follow" bar and return a pixmap.

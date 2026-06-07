@@ -26,11 +26,7 @@ static const QColor kDefaultBg( 0, 0, 0 );
 
 static const QColor kRed( 205, 0, 0 );
 static const QColor kGreen( 0, 205, 0 );
-static const QColor kYellow( 205, 205, 0 );
-static const QColor kBlue( 0, 0, 238 );
-static const QColor kMagenta( 205, 0, 205 );
 static const QColor kCyan( 0, 205, 205 );
-static const QColor kWhite( 229, 229, 229 );
 static const QColor kBrightRed( 255, 0, 0 );
 static const QColor kBrightYellow( 255, 255, 0 );
 

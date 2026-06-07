@@ -176,22 +176,21 @@ AnsiParseResult AnsiSgrParser::parseLine( const QString& line, AnsiProcessing mo
     cleanText.reserve( line.size() );
     klogg::vector<AnsiSegment> segments;
 
-    qsizetype textStart = 0;
+    int textStart = 0;
     QColor currentFg = defaultFg;
-    qsizetype rawIdx = 0;
-    const qsizetype rawLen = line.size();
+    int rawIdx = 0;
+    const int rawLen = static_cast<int>( line.size() );
 
-    auto closeRun = [ & ]( qsizetype cleanEnd ) {
-        const qsizetype runLen = cleanEnd - textStart;
+    auto closeRun = [ & ]( int cleanEnd ) {
+        const int runLen = cleanEnd - textStart;
         if ( runLen > 0 && collectSegments && currentFg != defaultFg ) {
-            segments.push_back( { static_cast<int>( textStart ), static_cast<int>( runLen ),
-                                  currentFg } );
+            segments.push_back( { textStart, runLen, currentFg } );
         }
     };
 
     while ( rawIdx < rawLen ) {
         if ( line[ rawIdx ].unicode() == 0x1B ) {
-            closeRun( cleanText.size() );
+            closeRun( static_cast<int>( cleanText.size() ) );
 
             ++rawIdx;
             if ( rawIdx < rawLen && line[ rawIdx ] == QLatin1Char( '[' ) ) {
@@ -279,7 +278,7 @@ AnsiParseResult AnsiSgrParser::parseLine( const QString& line, AnsiProcessing mo
                 }
             }
 
-            textStart = cleanText.size();
+            textStart = static_cast<int>( cleanText.size() );
         }
         else {
             cleanText.append( line[ rawIdx ] );
@@ -287,7 +286,7 @@ AnsiParseResult AnsiSgrParser::parseLine( const QString& line, AnsiProcessing mo
         }
     }
 
-    closeRun( cleanText.size() );
+    closeRun( static_cast<int>( cleanText.size() ) );
 
     return { std::move( cleanText ), std::move( segments ) };
 }

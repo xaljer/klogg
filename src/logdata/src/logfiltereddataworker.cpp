@@ -42,6 +42,8 @@
 #include <qsemaphore.h>
 #include <utility>
 
+#include <QCoreApplication>
+
 #include <robin_hood.h>
 #include <tbb/flow_graph.h>
 #include <vector>
@@ -183,6 +185,7 @@ LogFilteredDataWorker::~LogFilteredDataWorker() noexcept
         interruptRequested_.set();
         ScopedLock locker( operationsMutex_ );
         operationsPool_.waitForDone();
+        QCoreApplication::removePostedEvents( this );
         LOG_INFO << "LogFilteredDataWorker shutdown";
     } catch ( const std::exception& e ) {
         LOG_ERROR << "Failed to destroy LogFilteredDataWorker: " << e.what();

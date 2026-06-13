@@ -414,12 +414,6 @@ void MainWindow::reTranslateUI()
     reportIssueAction->setText( transAction( action::reportIssueText ) );
     reportIssueAction->setStatusTip( transAction( action::reportIssueStatusTip ) );
 
-    joinDiscordAction->setText( transAction( action::joinDiscordText ) );
-    joinDiscordAction->setStatusTip( transAction( action::joinDiscordStatusTip ) );
-
-    joinTelegramAction->setText( transAction( action::joinTelegramText ) );
-    joinTelegramAction->setStatusTip( transAction( action::joinTelegramStatusTip ) );
-
     generateDumpAction->setText( transAction( action::generateDumpText ) );
     generateDumpAction->setStatusTip( transAction( action::generateDumpStatusTip ) );
 
@@ -653,20 +647,6 @@ void MainWindow::createActions()
     reportIssueAction->setStatusTip( tr( action::reportIssueStatusTip ) );
     connect( reportIssueAction, &QAction::triggered, this,
              []( auto ) { IssueReporter::reportIssue( IssueTemplate::Bug ); } );
-
-    joinDiscordAction = new QAction( tr( action::joinDiscordText ), this );
-    joinDiscordAction->setStatusTip( tr( action::joinDiscordStatusTip ) );
-    connect( joinDiscordAction, &QAction::triggered, this, []( auto ) {
-        QUrl url( "https://discord.gg/DruNyQftzB" );
-        QDesktopServices::openUrl( url );
-    } );
-
-    joinTelegramAction = new QAction( tr( action::joinTelegramText ), this );
-    joinTelegramAction->setStatusTip( tr( action::joinTelegramStatusTip ) );
-    connect( joinTelegramAction, &QAction::triggered, this, []( auto ) {
-        QUrl url( "https://t.me/joinchat/JeIBxstIfp4xZTk6" );
-        QDesktopServices::openUrl( url );
-    } );
 
     generateDumpAction = new QAction( tr( action::generateDumpText ), this );
     generateDumpAction->setStatusTip( tr( action::generateDumpStatusTip ) );
@@ -939,8 +919,6 @@ void MainWindow::createMenus()
     helpMenu->addAction( showDocumentationAction );
     helpMenu->addSeparator();
     helpMenu->addAction( reportIssueAction );
-    helpMenu->addAction( joinDiscordAction );
-    helpMenu->addAction( joinTelegramAction );
     helpMenu->addSeparator();
     helpMenu->addAction( generateDumpAction );
     helpMenu->addSeparator();

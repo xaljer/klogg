@@ -601,7 +601,7 @@ const ShortcutAction::ShortcutList& ShortcutAction::defaultShortcutList()
             LogViewAddNextColorLabel,
             {
                 QApplication::tr( "Highlight text with next color" ),
-                QStringList{ "Ctrl+D" },
+                QStringList{ "Ctrl+D", "D" },
             },
         },
         {
@@ -629,7 +629,7 @@ const ShortcutAction::ShortcutList& ShortcutAction::defaultShortcutList()
             LogViewAddToSearch,
             {
                 QApplication::tr( "Add selection to search pattern" ),
-                QStringList{ "Shift+A" },
+                QStringList{ "Shift+A", "A" },
             },
         },
         {
@@ -643,7 +643,7 @@ const ShortcutAction::ShortcutList& ShortcutAction::defaultShortcutList()
             LogViewReplaceSearch,
             {
                 QApplication::tr( "Replace search pattern with selection" ),
-                QStringList{ "Shift+R" },
+                QStringList{ "Shift+R", "R" },
             },
         },
         {

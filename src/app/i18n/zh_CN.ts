@@ -2250,26 +2250,6 @@
     </message>
     <message>
         <location filename="../../ui/src/mainwindowtext.cpp" line="83"/>
-        <source>Join Discord community...</source>
-        <translation>加入Discord社区...</translation>
-    </message>
-    <message>
-        <location filename="../../ui/src/mainwindowtext.cpp" line="85"/>
-        <source>Join Klogg development community at Discord</source>
-        <translation>加入Klogg开发者Discord社区</translation>
-    </message>
-    <message>
-        <location filename="../../ui/src/mainwindowtext.cpp" line="86"/>
-        <source>Join Telegram community...</source>
-        <translation>加入Telegram社区...</translation>
-    </message>
-    <message>
-        <location filename="../../ui/src/mainwindowtext.cpp" line="88"/>
-        <source>Join Klogg development community at Telegram</source>
-        <translation>加入Klogg开发者Telegram社区</translation>
-    </message>
-    <message>
-        <location filename="../../ui/src/mainwindowtext.cpp" line="89"/>
         <source>Generate crash dump</source>
         <translation>生成崩溃报告</translation>
     </message>

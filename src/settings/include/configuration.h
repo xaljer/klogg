@@ -64,7 +64,7 @@ enum class AnsiProcessing {
     StripOnly = 1,
     RenderColors = 2,
 };
-static constexpr int MAX_RECENT_FILES = 25;
+static constexpr int MAX_RECENT_FILES = 30;
 
 struct RecorderCommand {
     QString name;
@@ -685,7 +685,7 @@ class Configuration final : public Persistable<Configuration> {
 
     // Default settings for new views
     bool searchAutoRefresh_ = false;
-    bool searchIgnoreCase_ = false;
+    bool searchIgnoreCase_ = true;
     bool searchLogicalCombining_ = false;
     QList<int> splitterSizes_;
 

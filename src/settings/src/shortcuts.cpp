@@ -231,6 +231,13 @@ const ShortcutAction::ShortcutList& ShortcutAction::defaultShortcutList()
             },
         },
         {
+            MainWindowCopyWithColor,
+            {
+                QApplication::tr( "Copy with color" ),
+                QStringList{ QKeySequence( Qt::CTRL | Qt::SHIFT | Qt::Key_C ).toString() },
+            },
+        },
+        {
             MainWindowOpenFromClipboard,
             {
                 QApplication::tr( "Paste text from clipboard" ),

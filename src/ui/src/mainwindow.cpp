@@ -554,6 +554,11 @@ void MainWindow::createActions()
     connect( copyPathToClipboardAction, &QAction::triggered, this,
              [ this ]( auto ) { this->copyFullPath(); } );
 
+    copyWithColorAction = new QAction( tr( action::copyWithColorText ), this );
+    copyWithColorAction->setStatusTip( tr( action::copyWithColorStatusTip ) );
+    connect( copyWithColorAction, &QAction::triggered, this,
+             [ this ]( auto ) { this->copyWithColor(); } );
+
     openClipboardAction = new QAction( tr( action::openClipboardText ), this );
     openClipboardAction->setStatusTip( tr( action::openClipboardStatusTip ) );
     connect( openClipboardAction, &QAction::triggered, this,
@@ -772,6 +777,7 @@ void MainWindow::updateShortcuts()
     setShortcuts( openContainingFolderAction, ShortcutAction::MainWindowOpenContainingFolder );
     setShortcuts( openInEditorAction, ShortcutAction::MainWindowOpenInEditor );
     setShortcuts( copyPathToClipboardAction, ShortcutAction::MainWindowCopyPathToClipboard );
+    setShortcuts( copyWithColorAction, ShortcutAction::MainWindowCopyWithColor );
     setShortcuts( openClipboardAction, ShortcutAction::MainWindowOpenFromClipboard );
     setShortcuts( openUrlAction, ShortcutAction::MainWindowOpenFromUrl );
     setShortcuts( followAction, ShortcutAction::MainWindowFollowFile );
@@ -865,6 +871,7 @@ void MainWindow::createMenus()
 
     editMenu = menuBar()->addMenu( tr( menu::editTitle ) );
     editMenu->addAction( copyAction );
+    editMenu->addAction( copyWithColorAction );
     editMenu->addAction( selectAllAction );
     editMenu->addSeparator();
     editMenu->addAction( findAction );
@@ -1202,6 +1209,17 @@ void MainWindow::copy()
             text.replace( QChar::Null, QChar::Space );
 
             sendTextToClipboard( text, true );
+        }
+    } catch ( std::exception& err ) {
+        LOG_ERROR << "failed to copy data to clipboard " << err.what();
+    }
+}
+
+void MainWindow::copyWithColor()
+{
+    try {
+        if ( auto current = currentCrawlerWidget(); current != nullptr ) {
+            current->copyWithColor();
         }
     } catch ( std::exception& err ) {
         LOG_ERROR << "failed to copy data to clipboard " << err.what();

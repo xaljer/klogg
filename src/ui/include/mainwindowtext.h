@@ -54,6 +54,8 @@ extern const char* openInEditorText;
 extern const char* openInEditorStatusTip;
 extern const char* copyPathToClipboardText;
 extern const char* copyPathToClipboardStatusTip;
+extern const char* copyWithColorText;
+extern const char* copyWithColorStatusTip;
 extern const char* openClipboardText;
 extern const char* openClipboardStatusTip;
 extern const char* openUrlText;

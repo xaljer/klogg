@@ -59,6 +59,8 @@
 #endif
 
 #include "abstractlogdata.h"
+#include "highlightedmatch.h"
+#include "highlighterset.h"
 #include "linetypes.h"
 #include "overviewwidget.h"
 #include "quickfind.h"
@@ -134,6 +136,7 @@ class AbstractLogView : public QAbstractScrollArea, public SearchableWidgetInter
     LineNumber getTopLine() const;
     // Return the text of the current selection.
     QString getSelectedText() const;
+    void copyWithColor();
     // True for partial selection
     bool isPartialSelection() const;
     // Instructs the widget to select the whole text.
@@ -389,6 +392,7 @@ class AbstractLogView : public QAbstractScrollArea, public SearchableWidgetInter
     QMenu* popupMenu_;
     QAction* copyAction_;
     QAction* copyWithLineNumbersAction_;
+    QAction* copyWithColorAction_;
     QAction* markAction_;
     QAction* sendToScratchpadAction_;
     QAction* replaceInScratchpadAction_;
@@ -480,6 +484,21 @@ class AbstractLogView : public QAbstractScrollArea, public SearchableWidgetInter
     double verticalScrollMultiplicator() const;
 
     void drawTextArea( QPaintDevice* paintDevice );
+
+    struct LineHighlightResult {
+        HighlightedMatchRanges matches;
+        HighlighterMatchType matchType{ HighlighterMatchType::NoMatch };
+        QColor lineMatchForeColor;
+    };
+    LineHighlightResult computeLineHighlightMatches(
+        const QString& expandedLine,
+        const klogg::vector<HighlightedMatch>& ansiSegments,
+        LineNumber lineNumber,
+        LineNumber searchStartIndex,
+        LineNumber searchEndIndex,
+        const Highlighter* patternHighlight,
+        const klogg::vector<Highlighter>& additionalHighlighters ) const;
+
     QPixmap drawPullToFollowBar( int width, qreal pixelRatio );
 
     void disableFollow();

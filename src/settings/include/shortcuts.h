@@ -74,6 +74,7 @@ struct ShortcutAction {
     static constexpr auto MainWindowOpenContainingFolder = "mainwindow.open_containing_folder";
     static constexpr auto MainWindowOpenInEditor = "mainwindow.open_in_editor";
     static constexpr auto MainWindowCopyPathToClipboard = "mainwindow.copy_path_to_clipboard";
+    static constexpr auto MainWindowCopyWithColor = "mainwindow.copy_with_color";
     static constexpr auto MainWindowOpenFromClipboard = "mainwindow.open_from_clipboard";
     static constexpr auto MainWindowOpenFromUrl = "mainwindow.open_from_url";
 

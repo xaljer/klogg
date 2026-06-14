@@ -180,6 +180,14 @@ QString CrawlerWidget::getSelectedText() const
         return logMainView_->getSelectedText();
 }
 
+void CrawlerWidget::copyWithColor() const
+{
+    if ( filteredView_->hasFocus() )
+        filteredView_->copyWithColor();
+    else
+        logMainView_->copyWithColor();
+}
+
 bool CrawlerWidget::isPartialSelection() const
 {
     if ( filteredView_->hasFocus() )

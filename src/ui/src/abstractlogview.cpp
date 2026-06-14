@@ -520,6 +520,7 @@ void AbstractLogView::mousePressEvent( QMouseEvent* mouseEvent )
         if ( selection_.isSingleLine() ) {
             copyAction_->setText( tr( "&Copy this line" ) );
             copyWithLineNumbersAction_->setText( tr( "Copy this line with line number" ) );
+            copyWithColorAction_->setText( tr( "Copy this line with color" ) );
 
             setSearchStartAction_->setEnabled( true );
             setSearchEndAction_->setEnabled( true );
@@ -532,6 +533,7 @@ void AbstractLogView::mousePressEvent( QMouseEvent* mouseEvent )
             copyAction_->setStatusTip( tr( "Copy the selection" ) );
 
             copyWithLineNumbersAction_->setText( tr( "Copy with line numbers" ) );
+            copyWithColorAction_->setText( tr( "Copy with color" ) );
 
             setSearchStartAction_->setEnabled( false );
             setSearchEndAction_->setEnabled( false );
@@ -1401,6 +1403,187 @@ void AbstractLogView::copyWithLineNumbers()
     }
 }
 
+namespace {
+QString htmlEscape( const QString& text )
+{
+    QString escaped = text;
+    escaped.replace( QChar( '&' ), QStringLiteral( "&amp;" ) );
+    escaped.replace( QChar( '<' ), QStringLiteral( "&lt;" ) );
+    escaped.replace( QChar( '>' ), QStringLiteral( "&gt;" ) );
+    escaped.replace( QChar( '"' ), QStringLiteral( "&quot;" ) );
+    return escaped;
+}
+
+QString buildHtmlLine( const QString& expandedLine,
+                        const klogg::vector<HighlightedMatch>& matches )
+{
+    if ( matches.empty() ) {
+        return htmlEscape( expandedLine );
+    }
+
+    QString result;
+    qsizetype pos = 0;
+    const auto lineSize = expandedLine.size();
+
+    for ( const auto& match : matches ) {
+        const auto matchStart = match.startColumn().get();
+        const auto matchSize = match.size().get();
+
+        if ( matchStart < 0 || matchSize <= 0 || matchStart + matchSize > lineSize ) {
+            LOG_WARNING << "buildHtmlLine: invalid match bounds start=" << matchStart
+                        << " size=" << matchSize << " lineSize=" << lineSize;
+            continue;
+        }
+
+        if ( matchStart > pos ) {
+            result += htmlEscape( expandedLine.mid( static_cast<int>( pos ),
+                                                    static_cast<int>( matchStart - pos ) ) );
+        }
+
+        const auto matchText = expandedLine.mid( static_cast<int>( matchStart ),
+                                                  static_cast<int>( matchSize ) );
+        const auto colorHex = match.foreColor().name( QColor::HexRgb );
+        const auto backHex = match.backColor().name( QColor::HexRgb );
+        if ( match.backColor().isValid() ) {
+            result += QStringLiteral(
+                          "<span style=\"color:%1;background-color:%2\">%3</span>" )
+                          .arg( colorHex, backHex, htmlEscape( matchText ) );
+        }
+        else {
+            result += QStringLiteral( "<span style=\"color:%1\">%2</span>" )
+                          .arg( colorHex, htmlEscape( matchText ) );
+        }
+
+        pos = matchStart + matchSize;
+    }
+
+    if ( pos < lineSize ) {
+        result += htmlEscape( expandedLine.mid( static_cast<int>( pos ) ) );
+    }
+
+    return result;
+}
+} // namespace
+
+void AbstractLogView::copyWithColor()
+{
+    const auto selectedLines = selection_.getLines();
+    if ( selectedLines.empty() ) {
+        LOG_DEBUG << "copyWithColor: no lines selected";
+        return;
+    }
+
+    LOG_INFO << "copyWithColor: selected " << selectedLines.size() << " lines";
+
+    try {
+        const auto& quickHighlighters = HighlighterSetCollection::get().quickHighlighters();
+
+        const auto highlightPatternMatches = Configuration::get().mainSearchHighlight();
+        const auto variateHighlightPatternMatches
+            = Configuration::get().variateMainSearchHighlight();
+
+        const Highlighter* patternHighlightPtr = nullptr;
+        std::optional<Highlighter> patternHighlight;
+        if ( highlightPatternMatches && !searchPattern_.isBoolean && !searchPattern_.isExclude
+             && !searchPattern_.pattern.isEmpty() ) {
+            patternHighlight = Highlighter{};
+            patternHighlight->setHighlightOnlyMatch( true );
+            patternHighlight->setVariateColors( variateHighlightPatternMatches );
+            patternHighlight->setPattern( searchPattern_.pattern );
+            patternHighlight->setIgnoreCase( !searchPattern_.isCaseSensitive );
+            patternHighlight->setUseRegex( !searchPattern_.isPlainText );
+            patternHighlight->setBackColor( Configuration::get().mainSearchBackColor() );
+            patternHighlight->setForeColor( Configuration::get().mainSearchForeColor() );
+            patternHighlightPtr = &*patternHighlight;
+        }
+
+        klogg::vector<Highlighter> additionalHighlighters;
+        for ( auto i = 0u; i < quickHighlighters_.size(); ++i ) {
+            const auto quickHighlighterIndex = static_cast<int>( i );
+            if ( quickHighlighterIndex >= quickHighlighters.size() ) {
+                break;
+            }
+            const auto quickHighlighter = quickHighlighters.at( quickHighlighterIndex );
+            for ( const auto& word : quickHighlighters_[ i ] ) {
+                Highlighter h{ word, false, true, quickHighlighter.color.foreColor,
+                               quickHighlighter.color.backColor };
+                h.setUseRegex( false );
+                additionalHighlighters.push_back( std::move( h ) );
+            }
+        }
+
+        LOG_DEBUG << "copyWithColor: " << additionalHighlighters.size()
+                  << " color label patterns built";
+
+        const auto searchStartIndex = lineIndex( searchStart_ );
+        const auto searchEndIndex = [ this ] {
+            auto index = lineIndex( searchEnd_ );
+            if ( searchEnd_ + 1_lcount != displayLineNumber( index ) ) {
+                index = index + 1_lcount;
+            }
+            return index;
+        }();
+
+        const auto ansiMode = Configuration::get().ansiProcessing();
+        const QColor defaultFg = palette().color( QPalette::Text );
+        const QColor defaultBg = palette().color( QPalette::Base );
+
+        QString html;
+        html += QStringLiteral(
+            "<pre style=\"font-family:monospace; white-space:pre; margin:0\">" );
+
+        QStringList plainLines;
+        size_t totalHighlightedMatches = 0;
+
+        for ( auto i = 0u; i < selectedLines.size(); ++i ) {
+            const auto lineNumber = selectedLines[ i ];
+
+            QString rawLine = logData_->getLineString( lineNumber );
+            rawLine.replace( QChar::Null, QChar::Space );
+            plainLines.append( rawLine );
+
+            QString expandedLine = untabify( std::move( rawLine ) );
+
+            klogg::vector<HighlightedMatch> ansiMatches;
+            if ( ansiMode != AnsiProcessing::None
+                 && expandedLine.contains( QChar( 0x1B ) ) ) {
+                const auto ansiResult
+                    = AnsiSgrParser::parseLine( expandedLine, ansiMode, defaultFg, defaultBg );
+                expandedLine = ansiResult.cleanText;
+                if ( ansiMode == AnsiProcessing::RenderColors && !ansiResult.segments.empty() ) {
+                    ansiMatches.reserve( ansiResult.segments.size() );
+                    for ( const auto& seg : ansiResult.segments ) {
+                        ansiMatches.emplace_back( LineColumn{ seg.startColumn },
+                                                  LineLength{ seg.length }, seg.foreColor,
+                                                  QColor() );
+                    }
+                }
+            }
+
+            auto highlightResult = computeLineHighlightMatches(
+                expandedLine, ansiMatches, lineNumber, searchStartIndex, searchEndIndex,
+                patternHighlightPtr, additionalHighlighters );
+
+            const auto matchCount = highlightResult.matches.matches().size();
+            totalHighlightedMatches += matchCount;
+
+            if ( i > 0 ) {
+                html += QChar( '\n' );
+            }
+            html += buildHtmlLine( expandedLine, highlightResult.matches.matches() );
+        }
+
+        html += QStringLiteral( "</pre>" );
+
+        LOG_DEBUG << "copyWithColor: " << totalHighlightedMatches
+                  << " total highlighted segments across " << selectedLines.size() << " lines";
+
+        sendTextAndHtmlToClipboard( plainLines.join( QChar( '\n' ) ), html );
+    } catch ( std::exception& err ) {
+        LOG_ERROR << "copyWithColor: failed to copy data to clipboard: " << err.what();
+    }
+}
+
 void AbstractLogView::markSelected()
 {
     auto lines = selection_.getLines();
@@ -2018,6 +2201,10 @@ void AbstractLogView::createMenu()
     connect( copyWithLineNumbersAction_, &QAction::triggered, this,
              [ this ]( auto ) { this->copyWithLineNumbers(); } );
 
+    copyWithColorAction_ = new QAction( tr( "Copy with color" ), this );
+    connect( copyWithColorAction_, &QAction::triggered, this,
+             [ this ]( auto ) { this->copyWithColor(); } );
+
     markAction_ = new QAction( tr( "&Mark" ), this );
     connect( markAction_, &QAction::triggered, this, [ this ]( auto ) { this->markSelected(); } );
 
@@ -2101,6 +2288,7 @@ void AbstractLogView::createMenu()
     popupMenu_->addSeparator();
     popupMenu_->addAction( copyAction_ );
     popupMenu_->addAction( copyWithLineNumbersAction_ );
+    popupMenu_->addAction( copyWithColorAction_ );
     popupMenu_->addAction( sendToScratchpadAction_ );
     popupMenu_->addAction( replaceInScratchpadAction_ );
     popupMenu_->addSeparator();
@@ -2201,6 +2389,55 @@ void AbstractLogView::updateScrollBars()
         type_safe::narrow_cast<int>( visibleColumns.get() * 7 / 8 ) );
 }
 
+AbstractLogView::LineHighlightResult
+AbstractLogView::computeLineHighlightMatches(
+    const QString& expandedLine, const klogg::vector<HighlightedMatch>& ansiSegments,
+    LineNumber lineNumber, LineNumber searchStartIndex, LineNumber searchEndIndex,
+    const Highlighter* patternHighlight,
+    const klogg::vector<Highlighter>& additionalHighlighters ) const
+{
+    HighlightedMatchRanges matches;
+    auto highlightType = HighlighterMatchType::NoMatch;
+    QColor lineMatchForeColor;
+
+    const auto insideSearchLimits
+        = !( lineNumber < searchStartIndex || lineNumber >= searchEndIndex );
+
+    if ( insideSearchLimits ) {
+        const auto& highlighterSet = HighlighterSetCollection::get().currentActiveSet();
+        highlightType = highlighterSet.matchLine( expandedLine, matches );
+
+        if ( highlightType == HighlighterMatchType::LineMatch && !matches.empty() ) {
+            lineMatchForeColor = matches.front().foreColor();
+        }
+    }
+
+    const auto ansiMode = Configuration::get().ansiProcessing();
+    if ( ansiMode == AnsiProcessing::RenderColors && !ansiSegments.empty() ) {
+        matches.addMatches( ansiSegments );
+    }
+
+    if ( insideSearchLimits ) {
+        if ( patternHighlight ) {
+            klogg::vector<HighlightedMatch> patternMatches;
+            patternHighlight->matchLine( expandedLine, patternMatches );
+            matches.addMatches( patternMatches );
+        }
+
+        for ( const auto& highlighter : additionalHighlighters ) {
+            klogg::vector<HighlightedMatch> colorLabelMatches;
+            highlighter.matchLine( expandedLine, colorLabelMatches );
+            matches.addMatches( colorLabelMatches );
+        }
+
+        klogg::vector<HighlightedMatch> quickFindMatches;
+        quickFindPattern_->matchLine( expandedLine, quickFindMatches );
+        matches.addMatches( quickFindMatches );
+    }
+
+    return { std::move( matches ), highlightType, lineMatchForeColor };
+}
+
 void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
 {
     // LOG_DEBUG << "devicePixelRatio: " << viewport()->devicePixelRatio();
@@ -2227,7 +2464,6 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
         = static_cast<int>( std::floor( paintDevice->width() / viewport()->devicePixelRatio() ) );
 
     const QPalette& palette = viewport()->palette();
-    const HighlighterSet& highlighterSet = HighlighterSetCollection::get().currentActiveSet();
     const auto& quickHighlighters = HighlighterSetCollection::get().quickHighlighters();
     const auto gutterBackgroundColor = palette.color( QPalette::AlternateBase );
     const auto separatorColor = palette.color( QPalette::Mid );
@@ -2413,43 +2649,29 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
             if ( lineNumber < searchStartIndex || lineNumber >= searchEndIndex ) {
                 foreColor = palette.brush( QPalette::Disabled, QPalette::Text ).color();
             }
-            else {
-                const auto highlightType
-                    = highlighterSet.matchLine( expandedLine, allHighlights );
 
-                if ( highlightType == HighlighterMatchType::LineMatch ) {
-                    foreColor = allHighlights.front().foreColor();
-                    const auto hBackColor = allHighlights.front().backColor();
-                    backColor = hBackColor.isValid() ? hBackColor : backColor;
-                }
-            }
-
+            klogg::vector<HighlightedMatch> ansiMatches;
             if ( ansiMode == AnsiProcessing::RenderColors && !ansiResult.segments.empty() ) {
-                klogg::vector<HighlightedMatch> ansiMatches;
                 ansiMatches.reserve( ansiResult.segments.size() );
                 for ( const auto& seg : ansiResult.segments ) {
                     ansiMatches.emplace_back( LineColumn{ seg.startColumn },
                                               LineLength{ seg.length }, seg.foreColor, QColor() );
                 }
-                allHighlights.addMatches( ansiMatches );
             }
+            auto highlightResult = computeLineHighlightMatches(
+                expandedLine, ansiMatches, lineNumber, searchStartIndex, searchEndIndex,
+                patternHighlight ? &*patternHighlight : nullptr, additionalHighlighters );
 
-            if ( !( lineNumber < searchStartIndex || lineNumber >= searchEndIndex )
-                 && patternHighlight ) {
-                klogg::vector<HighlightedMatch> patternMatches;
-                patternHighlight->matchLine( expandedLine, patternMatches );
-                allHighlights.addMatches( patternMatches );
+            allHighlights = std::move( highlightResult.matches );
+
+            if ( highlightResult.matchType == HighlighterMatchType::LineMatch
+                 && highlightResult.lineMatchForeColor.isValid() ) {
+                foreColor = highlightResult.lineMatchForeColor;
+                const auto hBackColor = !highlightResult.matches.empty()
+                    ? highlightResult.matches.front().backColor()
+                    : QColor();
+                backColor = hBackColor.isValid() ? hBackColor : backColor;
             }
-
-            for ( const auto& highlighter : additionalHighlighters ) {
-                klogg::vector<HighlightedMatch> colorLabelMatches;
-                highlighter.matchLine( expandedLine, colorLabelMatches );
-                allHighlights.addMatches( colorLabelMatches );
-            }
-
-            klogg::vector<HighlightedMatch> quickFindMatches;
-            quickFindPattern_->matchLine( expandedLine, quickFindMatches );
-            allHighlights.addMatches( quickFindMatches );
 
             const auto selectionPortion = selection_.getPortionForLine( lineNumber );
             if ( selectionPortion.isValid() ) {

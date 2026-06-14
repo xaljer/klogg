@@ -1565,6 +1565,11 @@
         <translation type="unfinished">拷贝选中内容到剪贴板</translation>
     </message>
     <message>
+        <location filename="../../settings/src/shortcuts.cpp" line="232"/>
+        <source>Copy with color</source>
+        <translation type="unfinished">复制(带颜色)</translation>
+    </message>
+    <message>
         <location filename="../../settings/src/shortcuts.cpp" line="182"/>
         <source>Exit application</source>
         <translation type="unfinished">退出应用</translation>

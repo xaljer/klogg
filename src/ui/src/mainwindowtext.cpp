@@ -56,6 +56,9 @@ const char* action::openInEditorStatusTip = QT_TR_NOOP( "Open current file in de
 const char* action::copyPathToClipboardText = QT_TR_NOOP( "Copy full path" );
 const char* action::copyPathToClipboardStatusTip
     = QT_TR_NOOP( "Copy full path for file to clipboard" );
+const char* action::copyWithColorText = QT_TR_NOOP( "Copy with color" );
+const char* action::copyWithColorStatusTip
+    = QT_TR_NOOP( "Copy the selection with syntax highlighting colors" );
 const char* action::openClipboardText = QT_TR_NOOP( "Open from clipboard" );
 const char* action::openClipboardStatusTip = QT_TR_NOOP( "Open clipboard as log file" );
 const char* action::openUrlText = QT_TR_NOOP( "Open from URL..." );

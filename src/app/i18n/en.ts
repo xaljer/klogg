@@ -1565,6 +1565,11 @@
         <translation>Copy selection to clipboard</translation>
     </message>
     <message>
+        <location filename="../../settings/src/shortcuts.cpp" line="232"/>
+        <source>Copy with color</source>
+        <translation>Copy with color</translation>
+    </message>
+    <message>
         <location filename="../../settings/src/shortcuts.cpp" line="182"/>
         <source>Exit application</source>
         <translation>Exit application</translation>

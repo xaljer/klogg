@@ -115,6 +115,7 @@ class MainWindow : public QMainWindow {
     void closeAll( ActionInitiator initiator );
     void selectAll();
     void copy();
+    void copyWithColor();
     void find();
     void clearLog();
     void copyFullPath();
@@ -264,6 +265,7 @@ class MainWindow : public QMainWindow {
     QAction* findAction;
     QAction* clearLogAction;
     QAction* copyPathToClipboardAction;
+    QAction* copyWithColorAction;
     QAction* openContainingFolderAction;
     QAction* openInEditorAction;
     QAction* openClipboardAction;

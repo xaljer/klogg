@@ -90,6 +90,7 @@ class CrawlerWidget : public QSplitter,
     LineNumber getTopLine() const;
     // Get the selected text as a string (from the main window)
     QString getSelectedText() const;
+    void copyWithColor() const;
     // True for partial selection
     bool isPartialSelection() const;
 

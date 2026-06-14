@@ -45,4 +45,22 @@ static inline void sendTextToClipboard(QString text, bool updateSelection = fals
         LOG_ERROR << "Failed to send text to clipboard: " << ex.what();
     }
 }
+
+static inline void sendTextAndHtmlToClipboard(const QString& text, const QString& html) {
+    auto clipboard = QApplication::clipboard();
+    if (!clipboard) {
+        LOG_WARNING << "Unable to access the clipboard.";
+        return;
+    }
+
+    try {
+        auto* mime = new QMimeData;
+        mime->setText(text);
+        mime->setHtml(html);
+        clipboard->setMimeData(mime, QClipboard::Clipboard);
+    }
+    catch(const std::exception& ex) {
+        LOG_ERROR << "Failed to send text and html to clipboard: " << ex.what();
+    }
+}
 #endif

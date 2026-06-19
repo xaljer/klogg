@@ -21,6 +21,7 @@
 
 #include <QAbstractItemView>
 #include <QCompleter>
+#include <QContextMenuEvent>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QHBoxLayout>
@@ -87,6 +88,17 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
     connect( lineEdit_, &QLineEdit::textChanged, this, &PatternInputWidget::onLineEditTextChanged );
     connect( lineEdit_, &QLineEdit::returnPressed, this, &PatternInputWidget::onLineEditReturnPressed );
 
+    lineEdit_->setContextMenuPolicy( Qt::CustomContextMenu );
+    connect( lineEdit_, &QWidget::customContextMenuRequested, this,
+             [ this ]( const QPoint& pos ) {
+                 Q_EMIT contextMenuRequested( lineEdit_->mapToGlobal( pos ) );
+             } );
+    chipsScrollArea_->setContextMenuPolicy( Qt::CustomContextMenu );
+    connect( chipsScrollArea_, &QWidget::customContextMenuRequested, this,
+             [ this ]( const QPoint& pos ) {
+                 Q_EMIT contextMenuRequested( chipsScrollArea_->mapToGlobal( pos ) );
+             } );
+
     // History dropdown button (visible in chip mode)
     historyButton_ = new QToolButton( this );
     historyButton_->setText( QString( QChar( 0x25BE ) ) );
@@ -123,14 +135,22 @@ void PatternInputWidget::setText( const QString& text )
 void PatternInputWidget::setPatterns( const QStringList& patterns )
 {
     if ( isChipMode_ ) {
-        patterns_ = patterns;
+        patterns_.clear();
+        for ( const auto& p : patterns ) {
+            const auto parts = splitPattern( p );
+            for ( const auto& part : parts ) {
+                if ( !part.isEmpty() && !patterns_.contains( part ) ) {
+                    patterns_.append( part );
+                }
+            }
+        }
         updateChips();
         lineEdit_->clear();
         scrollToEnd();
     }
     else {
         lineEdit_->setText( patterns.join( isRegexMode_ ? QLatin1String( "|" )
-                                                         : QStringLiteral( " or " ) ) );
+                                                          : QStringLiteral( " or " ) ) );
     }
 }
 
@@ -263,15 +283,27 @@ void PatternInputWidget::showHistoryMenu()
     }
 }
 
+QStringList PatternInputWidget::splitPattern( const QString& text ) const
+{
+    if ( text.isEmpty() ) {
+        return {};
+    }
+
+    if ( isRegexMode_ ) {
+        return text.split( QLatin1Char( '|' ) );
+    }
+    else {
+        return text.split( QStringLiteral( " or " ) );
+    }
+}
+
 void PatternInputWidget::parsePatterns( const QString& text )
 {
     patterns_.clear();
-    if ( !text.isEmpty() ) {
-        if ( isRegexMode_ ) {
-            patterns_ = text.split( QLatin1Char( '|' ) );
-        }
-        else {
-            patterns_ = text.split( QStringLiteral( " or " ) );
+    const auto parts = splitPattern( text );
+    for ( const auto& part : parts ) {
+        if ( !part.isEmpty() ) {
+            patterns_.append( part );
         }
     }
 }
@@ -349,8 +381,15 @@ void PatternInputWidget::updateChips()
 
 void PatternInputWidget::addChip( const QString& pattern )
 {
-    if ( !pattern.isEmpty() && !patterns_.contains( pattern ) ) {
-        patterns_.append( pattern );
+    const auto parts = splitPattern( pattern );
+    bool changed = false;
+    for ( const auto& part : parts ) {
+        if ( !part.isEmpty() && !patterns_.contains( part ) ) {
+            patterns_.append( part );
+            changed = true;
+        }
+    }
+    if ( changed ) {
         updateChips();
         scrollToEnd();
         Q_EMIT chipChanged( text() );
@@ -475,6 +514,11 @@ bool PatternInputWidget::eventFilter( QObject* obj, QEvent* event )
             finishChipEdit( edit, false );
         }
     }
+    else if ( event->type() == QEvent::ContextMenu ) {
+        auto* contextEvent = static_cast<QContextMenuEvent*>( event );
+        Q_EMIT contextMenuRequested( contextEvent->globalPos() );
+        return true;
+    }
     return QWidget::eventFilter( obj, event );
 }
 
@@ -590,8 +634,16 @@ void PatternInputWidget::finishChipEdit( QLineEdit* edit, bool accept )
     if ( accept && newText != originalText ) {
         if ( chipIndex >= 0 && chipIndex < patterns_.size() ) {
             if ( !newText.isEmpty() ) {
-                patterns_[ chipIndex ] = newText;
-                chip->setProperty( "chipText", newText );
+                const auto parts = splitPattern( newText );
+                patterns_.removeAt( chipIndex );
+                int insertPos = chipIndex;
+                for ( const auto& part : parts ) {
+                    if ( !part.isEmpty() && !patterns_.contains( part ) ) {
+                        patterns_.insert( insertPos, part );
+                        ++insertPos;
+                    }
+                }
+                updateChips();
                 Q_EMIT chipChanged( text() );
             }
             else {

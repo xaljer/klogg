@@ -481,7 +481,7 @@ void CrawlerWidget::saveAsPredefinedFilter()
 {
     const auto currentText = getCurrentSearchText();
 
-    Q_EMIT saveCurrentSearchAsPredefinedFilter( currentText );
+    Q_EMIT saveCurrentSearchAsPredefinedFilter( currentText, useRegexpButton_->isChecked() );
 }
 
 void CrawlerWidget::showSearchContextMenu()
@@ -1188,6 +1188,10 @@ void CrawlerWidget::setup()
     QAction* editSearchHistoryAction = new QAction( tr( "Edit search history" ), this );
     QAction* saveAsPredefinedFilterAction = new QAction( tr( "Save as Filter" ), this );
 
+    clearSearchHistoryAction_ = clearSearchHistoryAction;
+    editSearchHistoryAction_ = editSearchHistoryAction;
+    saveAsPredefinedFilterAction_ = saveAsPredefinedFilterAction;
+
     searchLineContextMenu_ = searchLineEdit_->lineEdit()->createStandardContextMenu();
     searchLineContextMenu_->addSeparator();
     searchLineContextMenu_->addAction( saveAsPredefinedFilterAction );
@@ -1317,6 +1321,16 @@ void CrawlerWidget::setup()
                  if ( Configuration::get().autoRunSearchOnPatternChange() ) {
                      dispatchToMainThread( [ this ] { startNewSearch(); } );
                  }
+             } );
+
+    connect( patternInputWidget_, &PatternInputWidget::contextMenuRequested, this,
+             [ this ]( const QPoint& globalPos ) {
+                 QMenu menu( this );
+                 menu.addAction( saveAsPredefinedFilterAction_ );
+                 menu.addSeparator();
+                 menu.addAction( editSearchHistoryAction_ );
+                 menu.addAction( clearSearchHistoryAction_ );
+                 menu.exec( globalPos );
              } );
 
     connect( visibilityBox_, QOverload<int>::of( &QComboBox::currentIndexChanged ), this,

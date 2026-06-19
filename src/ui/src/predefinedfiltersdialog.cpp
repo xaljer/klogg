@@ -115,11 +115,12 @@ PredefinedFiltersDialog::PredefinedFiltersDialog( QWidget* parent )
     } );
 }
 
-PredefinedFiltersDialog::PredefinedFiltersDialog( const QString& newFilter, QWidget* parent )
+PredefinedFiltersDialog::PredefinedFiltersDialog( const QString& newFilter, bool useRegex,
+                                                  QWidget* parent )
     : PredefinedFiltersDialog( parent )
 {
     if ( !newFilter.isEmpty() ) {
-        addFilterRow( newFilter );
+        addFilterRow( newFilter, useRegex );
     }
 }
 
@@ -214,13 +215,14 @@ void PredefinedFiltersDialog::addFilter()
     addFilterRow( {} );
 }
 
-void PredefinedFiltersDialog::addFilterRow( const QString& newFilter )
+void PredefinedFiltersDialog::addFilterRow( const QString& newFilter, bool useRegex )
 {
     const auto newRow = filtersTableWidget->rowCount();
     filtersTableWidget->setRowCount( newRow + 1 );
     filtersTableWidget->setItem( newRow, 1, new QTableWidgetItem( newFilter ) );
     filtersTableWidget->setItem( newRow, 0, new QTableWidgetItem( "" ) );
     auto regexCheckBox = new CenteredCheckbox;
+    regexCheckBox->setChecked( useRegex );
     filtersTableWidget->setCellWidget( newRow, 2, regexCheckBox );
 
     filtersTableWidget->scrollToItem( filtersTableWidget->item( newRow, 0 ) );

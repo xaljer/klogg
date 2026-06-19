@@ -767,3 +767,110 @@ SCENARIO( "PatternInputWidget deletion timing verification", "[ui]" )
         }
     }
 }
+
+SCENARIO( "PatternInputWidget splits separator in addChip", "[ui]" )
+{
+    PatternInputWidget widget;
+    widget.show();
+    widget.setChipMode( true );
+    QTest::qWait( 50 );
+
+    PatternInputWidgetVisitor visitor;
+    visitor.widget = &widget;
+
+    GIVEN( "chip mode with regex mode enabled" )
+    {
+        widget.setRegexMode( true );
+
+        WHEN( "typing pipe-separated text and pressing return" )
+        {
+            QTest::keyClicks( visitor.lineEdit(), "error|warning" );
+            QTest::keyClick( visitor.lineEdit(), Qt::Key_Return );
+            QTest::qWait( 50 );
+
+            THEN( "text is split into separate chips" )
+            {
+                REQUIRE( visitor.patterns().size() == 2 );
+                REQUIRE( visitor.patterns().at( 0 ) == "error" );
+                REQUIRE( visitor.patterns().at( 1 ) == "warning" );
+                REQUIRE( widget.text() == "error|warning" );
+            }
+        }
+
+        WHEN( "typing three pipe-separated terms and pressing return" )
+        {
+            QTest::keyClicks( visitor.lineEdit(), "a|b|c" );
+            QTest::keyClick( visitor.lineEdit(), Qt::Key_Return );
+            QTest::qWait( 50 );
+
+            THEN( "text is split into three chips" )
+            {
+                REQUIRE( visitor.patterns().size() == 3 );
+                REQUIRE( widget.text() == "a|b|c" );
+            }
+        }
+    }
+
+    GIVEN( "chip mode with non-regex mode" )
+    {
+        widget.setRegexMode( false );
+
+        WHEN( "typing 'or'-separated text and pressing return" )
+        {
+            QTest::keyClicks( visitor.lineEdit(), "foo or bar" );
+            QTest::keyClick( visitor.lineEdit(), Qt::Key_Return );
+            QTest::qWait( 50 );
+
+            THEN( "text is split into separate chips" )
+            {
+                REQUIRE( visitor.patterns().size() == 2 );
+                REQUIRE( visitor.patterns().at( 0 ) == "foo" );
+                REQUIRE( visitor.patterns().at( 1 ) == "bar" );
+                REQUIRE( widget.text() == "foo or bar" );
+            }
+        }
+    }
+}
+
+SCENARIO( "PatternInputWidget setPatterns splits separators", "[ui]" )
+{
+    PatternInputWidget widget;
+    widget.show();
+    widget.setChipMode( true );
+    widget.setRegexMode( true );
+    QTest::qWait( 50 );
+
+    PatternInputWidgetVisitor visitor;
+    visitor.widget = &widget;
+
+    GIVEN( "chip mode with regex mode enabled" )
+    {
+        WHEN( "setting patterns containing pipe separator" )
+        {
+            widget.setPatterns( QStringList{ "error|warning", "info" } );
+            QTest::qWait( 50 );
+
+            THEN( "pipe-containing pattern is split into separate chips" )
+            {
+                REQUIRE( visitor.patterns().size() == 3 );
+                REQUIRE( visitor.patterns().at( 0 ) == "error" );
+                REQUIRE( visitor.patterns().at( 1 ) == "warning" );
+                REQUIRE( visitor.patterns().at( 2 ) == "info" );
+            }
+        }
+
+        WHEN( "setting patterns with duplicates across splits" )
+        {
+            widget.setPatterns( QStringList{ "a|b", "b|c" } );
+            QTest::qWait( 50 );
+
+            THEN( "duplicates are deduplicated" )
+            {
+                REQUIRE( visitor.patterns().size() == 3 );
+                REQUIRE( visitor.patterns().contains( "a" ) );
+                REQUIRE( visitor.patterns().contains( "b" ) );
+                REQUIRE( visitor.patterns().contains( "c" ) );
+            }
+        }
+    }
+}

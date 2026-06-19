@@ -168,8 +168,8 @@ MainWindow::MainWindow( WindowSession session )
     signalMux_.connect(
         SIGNAL( newSelection( LineNumber, LinesCount, LineColumn, LineLength ) ), this,
         SLOT( lineNumberHandler( LineNumber, LinesCount, LineColumn, LineLength ) ) );
-    signalMux_.connect( SIGNAL( saveCurrentSearchAsPredefinedFilter( QString ) ), this,
-                        SLOT( newPredefinedFilterHandler( QString ) ) );
+    signalMux_.connect( SIGNAL( saveCurrentSearchAsPredefinedFilter( QString, bool ) ), this,
+                        SLOT( newPredefinedFilterHandler( QString, bool ) ) );
 
     signalMux_.connect( SIGNAL( sendToScratchpad( QString ) ), this,
                         SLOT( sendToScratchpad( QString ) ) );
@@ -1312,9 +1312,9 @@ void MainWindow::editHighlighters()
 }
 
 // Opens dialog to configure predefined filters
-void MainWindow::editPredefinedFilters( const QString& newFilter )
+void MainWindow::editPredefinedFilters( const QString& newFilter, bool useRegex )
 {
-    PredefinedFiltersDialog dialog( newFilter, this );
+    PredefinedFiltersDialog dialog( newFilter, useRegex, this );
 
     signalMux_.connect( &dialog, SIGNAL( optionsChanged() ), SLOT( applyConfiguration() ) );
 
@@ -1497,9 +1497,9 @@ void MainWindow::lineNumberHandler( LineNumber startLine, LinesCount nLines, Lin
     }
 }
 
-void MainWindow::newPredefinedFilterHandler( QString newFilter )
+void MainWindow::newPredefinedFilterHandler( QString newFilter, bool useRegex )
 {
-    editPredefinedFilters( newFilter );
+    editPredefinedFilters( newFilter, useRegex );
 }
 
 void MainWindow::updateLoadingProgress( int progress )

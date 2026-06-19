@@ -68,6 +68,7 @@ class PatternInputWidget : public QWidget {
     void textChanged( const QString& text );
     void chipChanged( const QString& text );
     void returnPressed();
+    void contextMenuRequested( const QPoint& globalPos );
 
   public Q_SLOTS:
     void onChipRemoveClicked();
@@ -77,6 +78,7 @@ class PatternInputWidget : public QWidget {
     void onLineEditTextChanged( const QString& text );
 
   private:
+    QStringList splitPattern( const QString& text ) const;
     void parsePatterns( const QString& text );
     QString combinePatterns() const;
 

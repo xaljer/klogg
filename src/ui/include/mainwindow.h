@@ -124,7 +124,7 @@ class MainWindow : public QMainWindow {
     void openClipboard();
     void openUrl();
     void editHighlighters();
-    void editPredefinedFilters( const QString& newFilter = {} );
+    void editPredefinedFilters( const QString& newFilter = {}, bool useRegex = false );
     void options();
     void about();
     void aboutQt();
@@ -153,7 +153,7 @@ class MainWindow : public QMainWindow {
 
     // Save current search in line edit as predefined filter.
     // Opens dialog with new entry.
-    void newPredefinedFilterHandler( QString newFilter );
+    void newPredefinedFilterHandler( QString newFilter, bool useRegex );
 
     // Instructs the widget to update the loading progress gauge
     void updateLoadingProgress( int progress );

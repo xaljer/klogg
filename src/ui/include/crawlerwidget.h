@@ -175,7 +175,7 @@ class CrawlerWidget : public QSplitter,
     void newSelection( LineNumber startLine, LinesCount nLines, LineColumn startCol,
                        LineLength nSymbols );
     // Sent up when user wants to save new predefined filter from current search
-    void saveCurrentSearchAsPredefinedFilter( QString newFilter );
+    void saveCurrentSearchAsPredefinedFilter( QString newFilter, bool useRegex );
 
     void sendToScratchpad( QString );
     void replaceDataInScratchpad( QString );
@@ -390,6 +390,9 @@ class CrawlerWidget : public QSplitter,
     QComboBox* searchLineEdit_;
     PatternInputWidget* patternInputWidget_;
     QMenu* searchLineContextMenu_;
+    QAction* saveAsPredefinedFilterAction_;
+    QAction* editSearchHistoryAction_;
+    QAction* clearSearchHistoryAction_;
     QCompleter* searchLineCompleter_;
     QMetaObject::Connection chipHistoryConnection_;
 

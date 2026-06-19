@@ -51,7 +51,8 @@ class PredefinedFiltersDialog : public QDialog, public Ui::PredefinedFiltersDial
 
   public:
     PredefinedFiltersDialog( QWidget* parent = nullptr );
-    PredefinedFiltersDialog( const QString& newFilter, QWidget* parent = nullptr );
+    PredefinedFiltersDialog( const QString& newFilter, bool useRegex = false,
+                             QWidget* parent = nullptr );
 
   private Q_SLOTS:
     void addFilter();
@@ -72,7 +73,7 @@ class PredefinedFiltersDialog : public QDialog, public Ui::PredefinedFiltersDial
     void optionsChanged();
 
   private:
-    void addFilterRow( const QString& newFilter );
+    void addFilterRow( const QString& newFilter, bool useRegex = false );
     void populateFiltersTable( const PredefinedFiltersCollection::Collection& filters );
 
     void swapFilters( int currentRow, int newRow, int column );

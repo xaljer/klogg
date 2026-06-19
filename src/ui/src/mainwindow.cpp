@@ -389,6 +389,7 @@ void MainWindow::reTranslateUI()
         transAction( action::lineNumbersVisibleInFilteredText ) );
 
     followAction->setText( transAction( action::followText ) );
+    goToTopAction->setText( transAction( action::goToTopText ) );
     textWrapAction->setText( transAction( action::wrapText ) );
     reloadAction->setText( transAction( action::reloadText ) );
     stopAction->setText( transAction( action::stopText ) );
@@ -593,6 +594,9 @@ void MainWindow::createActions()
     followAction->setEnabled( config.anyFileWatchEnabled() );
     connect( followAction, &QAction::toggled, this, &MainWindow::followSet );
 
+    goToTopAction = new QAction( tr( action::goToTopText ), this );
+    signalMux_.connect( goToTopAction, SIGNAL( triggered() ), SLOT( jumpToTop() ) );
+
     textWrapAction = new QAction( tr( action::wrapText ), this );
     textWrapAction->setCheckable( true );
     textWrapAction->setEnabled( true );
@@ -781,6 +785,7 @@ void MainWindow::updateShortcuts()
     setShortcuts( openClipboardAction, ShortcutAction::MainWindowOpenFromClipboard );
     setShortcuts( openUrlAction, ShortcutAction::MainWindowOpenFromUrl );
     setShortcuts( followAction, ShortcutAction::MainWindowFollowFile );
+    setShortcuts( goToTopAction, ShortcutAction::MainWindowGoToTop );
     setShortcuts( textWrapAction, ShortcutAction::MainWindowTextWrap );
     setShortcuts( reloadAction, ShortcutAction::MainWindowReload );
     setShortcuts( stopAction, ShortcutAction::MainWindowStop );
@@ -796,6 +801,7 @@ void MainWindow::loadIcons()
     stopAction->setIcon( iconLoader_.load( "icons8-delete" ) );
     reloadAction->setIcon( iconLoader_.load( "icons8-restore-page" ) );
     followAction->setIcon( iconLoader_.load( "icons8-fast-forward" ) );
+    goToTopAction->setIcon( iconLoader_.load( "icons8-up" ) );
     showScratchPadAction->setIcon( iconLoader_.load( "icons8-create" ) );
     addToFavoritesAction->setIcon( iconLoader_.load( "icons8-star" ) );
     addToFavoritesMenuAction->setIcon( iconLoader_.load( "icons8-star" ) );
@@ -897,6 +903,7 @@ void MainWindow::createMenus()
     viewMenu->addAction( chipModeAction );
     viewMenu->addSeparator();
     viewMenu->addAction( followAction );
+    viewMenu->addAction( goToTopAction );
     viewMenu->addSeparator();
     viewMenu->addAction( reloadAction );
 
@@ -962,6 +969,7 @@ void MainWindow::createToolBars()
     toolBar->addAction( openAction );
     toolBar->addAction( reloadAction );
     toolBar->addAction( followAction );
+    toolBar->addAction( goToTopAction );
     toolBar->addAction( addToFavoritesAction );
     toolBar->addAction( recordAction );
     toolBar->addWidget( infoLine );

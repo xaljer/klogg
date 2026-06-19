@@ -132,6 +132,7 @@ struct CrawlerWidget::access_by<CrawlerWidgetPrivate> {
 
     void setSearchPattern( const QString& pattern )
     {
+        crawler->searchLineEdit_->clearEditText();
         QTest::keyClicks( crawler->searchLineEdit_, pattern );
     }
 
@@ -225,6 +226,50 @@ struct CrawlerWidget::access_by<CrawlerWidgetPrivate> {
         auto* vbar = crawler->logMainView_->verticalScrollBar();
         vbar->setValue( vbar->maximum() );
         QTest::qWait( 100 );
+    }
+
+    bool isFilteredFollowModeEnabled()
+    {
+        return crawler->filteredView_->isFollowEnabled();
+    }
+
+    int mainVerticalScrollValue()
+    {
+        return crawler->logMainView_->verticalScrollBar()->value();
+    }
+
+    int filteredVerticalScrollValue()
+    {
+        return crawler->filteredView_->verticalScrollBar()->value();
+    }
+
+    void scrollMainVerticallyToMiddle()
+    {
+        auto* vbar = crawler->logMainView_->verticalScrollBar();
+        vbar->setValue( vbar->maximum() / 2 );
+        QTest::qWait( 50 );
+    }
+
+    void scrollFilteredVerticallyToMiddle()
+    {
+        auto* vbar = crawler->filteredView_->verticalScrollBar();
+        vbar->setValue( vbar->maximum() / 2 );
+        QTest::qWait( 50 );
+    }
+
+    void focusMainView()
+    {
+        crawler->logMainView_->setFocus();
+    }
+
+    void focusFilteredView()
+    {
+        crawler->filteredView_->setFocus();
+    }
+
+    void jumpToTop()
+    {
+        crawler->jumpToTop();
     }
 };
 
@@ -539,6 +584,129 @@ SCENARIO( "Crawler widget text wrap scroll range", "[ui][textwrap]" )
                 {
                     REQUIRE( true );
                 }
+            }
+        }
+    }
+}
+
+SCENARIO( "Follow file (F) toggles follow mode on both views simultaneously", "[ui][shortcut]" )
+{
+    QTemporaryFile file{ "crawler_follow_test_XXXXXX" };
+    REQUIRE( generateDataFiles( file ) );
+
+    Session session;
+
+    CrawlerWidgetVisitor crawlerVisitor;
+    crawlerVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+
+    REQUIRE(
+        waitUiState( [ & ]() { return crawlerVisitor.getLogNbLines().get() == SL_NB_LINES; } ) );
+    REQUIRE( waitUiState( [ & ]() { return crawlerVisitor.isLoadingFinished(); } ) );
+
+    crawlerVisitor.render();
+
+    REQUIRE_FALSE( crawlerVisitor.isFollowModeEnabled() );
+    REQUIRE_FALSE( crawlerVisitor.isFilteredFollowModeEnabled() );
+
+    WHEN( "follow mode is enabled via signal" )
+    {
+        Q_EMIT crawlerVisitor.crawler->followSet( true );
+        QTest::qWait( 50 );
+
+        THEN( "both views enable follow mode" )
+        {
+            REQUIRE( crawlerVisitor.isFollowModeEnabled() );
+            REQUIRE( crawlerVisitor.isFilteredFollowModeEnabled() );
+        }
+
+        AND_WHEN( "follow mode is disabled via signal" )
+        {
+            Q_EMIT crawlerVisitor.crawler->followSet( false );
+            QTest::qWait( 50 );
+
+            THEN( "both views disable follow mode" )
+            {
+                REQUIRE_FALSE( crawlerVisitor.isFollowModeEnabled() );
+                REQUIRE_FALSE( crawlerVisitor.isFilteredFollowModeEnabled() );
+            }
+        }
+    }
+}
+
+SCENARIO( "Go to top (T) scrolls both views regardless of focus", "[ui][shortcut]" )
+{
+    QTemporaryFile file{ "crawler_gototop_XXXXXX" };
+    REQUIRE( generateDataFiles( file ) );
+
+    Session session;
+
+    CrawlerWidgetVisitor crawlerVisitor;
+    crawlerVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+
+    REQUIRE(
+        waitUiState( [ & ]() { return crawlerVisitor.getLogNbLines().get() == SL_NB_LINES; } ) );
+    REQUIRE( waitUiState( [ & ]() { return crawlerVisitor.isLoadingFinished(); } ) );
+
+    crawlerVisitor.setSearchPattern( "this is line" );
+    crawlerVisitor.runSearch();
+
+    REQUIRE( waitUiState(
+        [ & ]() { return crawlerVisitor.getLogFilteredNbLines().get() == SL_NB_LINES; } ) );
+
+    crawlerVisitor.setTextWrap( false );
+    crawlerVisitor.resizeViews( 320, 120 );
+    crawlerVisitor.render();
+
+    REQUIRE( crawlerVisitor.mainViewVerticalScrollMax() > 0 );
+
+    GIVEN( "both views scrolled away from the top and filtered view focused" )
+    {
+        crawlerVisitor.scrollMainVerticallyToMiddle();
+        crawlerVisitor.scrollFilteredVerticallyToMiddle();
+        crawlerVisitor.render();
+
+        REQUIRE( crawlerVisitor.mainVerticalScrollValue() > 0 );
+        REQUIRE( crawlerVisitor.filteredVerticalScrollValue() > 0 );
+
+        crawlerVisitor.focusFilteredView();
+
+        WHEN( "jumpToTop is called" )
+        {
+            crawlerVisitor.jumpToTop();
+            QTest::qWait( 50 );
+            crawlerVisitor.render();
+
+            THEN( "both views scroll to the top" )
+            {
+                REQUIRE( crawlerVisitor.mainVerticalScrollValue() == 0 );
+                REQUIRE( crawlerVisitor.filteredVerticalScrollValue() == 0 );
+            }
+        }
+    }
+
+    GIVEN( "both views scrolled away from the top and main view focused" )
+    {
+        crawlerVisitor.scrollMainVerticallyToMiddle();
+        crawlerVisitor.scrollFilteredVerticallyToMiddle();
+        crawlerVisitor.render();
+
+        REQUIRE( crawlerVisitor.mainVerticalScrollValue() > 0 );
+        REQUIRE( crawlerVisitor.filteredVerticalScrollValue() > 0 );
+
+        crawlerVisitor.focusMainView();
+
+        WHEN( "jumpToTop is called" )
+        {
+            crawlerVisitor.jumpToTop();
+            QTest::qWait( 50 );
+            crawlerVisitor.render();
+
+            THEN( "both views scroll to the top" )
+            {
+                REQUIRE( crawlerVisitor.mainVerticalScrollValue() == 0 );
+                REQUIRE( crawlerVisitor.filteredVerticalScrollValue() == 0 );
             }
         }
     }

@@ -323,6 +323,12 @@ void CrawlerWidget::goToLine()
     }
 }
 
+void CrawlerWidget::jumpToTop()
+{
+    logMainView_->selectAndDisplayLine( 0_lnum );
+    filteredView_->selectAndDisplayLine( 0_lnum );
+}
+
 //
 // Protected functions
 //

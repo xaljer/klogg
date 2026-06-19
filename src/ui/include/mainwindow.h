@@ -274,6 +274,7 @@ class MainWindow : public QMainWindow {
     QAction* lineNumbersVisibleInMainAction;
     QAction* lineNumbersVisibleInFilteredAction;
     QAction* followAction;
+    QAction* goToTopAction;
     QAction* textWrapAction;
     QAction* chipModeAction;
     QAction* reloadAction;

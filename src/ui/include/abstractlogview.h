@@ -434,18 +434,20 @@ class AbstractLogView : public QAbstractScrollArea, public SearchableWidgetInter
         LineNumber first_line_;
         LineNumber last_line_;
         LineColumn first_column_;
+        int actual_height_;
     };
     struct PullToFollowCache {
         QPixmap pixmap_;
         LineLength nb_columns_;
     };
-    TextAreaCache textAreaCache_ = { {}, true, 0_lnum, 0_lnum, 0_lcol };
+    TextAreaCache textAreaCache_ = { {}, true, 0_lnum, 0_lnum, 0_lcol, 0 };
     PullToFollowCache pullToFollowCache_ = { {}, 0_length };
     QFontMetrics pixmapFontMetrics_;
 
     LinesCount getNbVisibleLines() const;
     LinesCount getNbBottomWrappedVisibleLines() const;
     LineLength getNbVisibleCols() const;
+    bool shouldBottomAlignFrame() const;
 
     FilePosition convertCoordToFilePos( const QPoint& pos ) const;
     OptionalLineNumber convertCoordToLine( int yPos ) const;

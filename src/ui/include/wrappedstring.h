@@ -23,6 +23,7 @@
 #include <qglobal.h>
 
 #include <QStringView>
+#include <functional>
 
 #include "containers.h"
 #include "linetypes.h"
@@ -30,10 +31,68 @@
 class WrappedString {
 public:
     using WrappedStringPart = QStringView;
+    using TextWidthFn = std::function<int( QStringView )>;
 
     static WrappedStringPart makeWrappedStringPart(const QString& lineText, 
         LineColumn firstCol, LineLength length ) {
         return QStringView( lineText ).mid( firstCol.get(), length.get() );
+    }
+
+
+    // Pixel-based wrapping: uses actual text width measurement for accurate wrapping
+    explicit WrappedString( QString longLine, int availablePixelWidth, TextWidthFn textWidthFn )
+    {
+        unwrappedLine_ = longLine;
+        if ( longLine.isEmpty() ) {
+            wrappedLines_.push_back( WrappedStringPart{} );
+        }
+        else {
+            WrappedStringPart lineToWrap( longLine );
+            while ( !lineToWrap.isEmpty() ) {
+                int totalWidth = textWidthFn( lineToWrap );
+                if ( totalWidth <= availablePixelWidth ) {
+                    wrappedLines_.push_back( lineToWrap );
+                    break;
+                }
+
+                auto maxChars = lineToWrap.size();
+                auto low = static_cast<qsizetype>( 1 );
+                auto high = maxChars;
+                qsizetype fitCount = 1;
+
+                while ( low <= high ) {
+                    auto mid = low + ( high - low ) / 2;
+                    auto candidate = lineToWrap.left( mid );
+                    int candidateWidth = textWidthFn( candidate );
+                    if ( candidateWidth <= availablePixelWidth ) {
+                        fitCount = mid;
+                        low = mid + 1;
+                    }
+                    else {
+                        high = mid - 1;
+                    }
+                }
+
+                WrappedStringPart fittingPart = lineToWrap.left( fitCount );
+                auto lastSpaceIt = std::find_if( fittingPart.rbegin(), fittingPart.rend(),
+                                                 []( QChar c ) { return c.isSpace(); } );
+                if ( lastSpaceIt != fittingPart.rend() ) {
+                    auto spacePos = std::distance( fittingPart.begin(), lastSpaceIt.base() );
+                    wrappedLines_.push_back( lineToWrap.left( spacePos ) );
+                    lineToWrap = lineToWrap.mid( spacePos );
+                }
+                else {
+                    if ( fitCount > 0 ) {
+                        wrappedLines_.push_back( lineToWrap.left( fitCount ) );
+                        lineToWrap = lineToWrap.mid( fitCount );
+                    }
+                    else {
+                        wrappedLines_.push_back( lineToWrap.left( 1 ) );
+                        lineToWrap = lineToWrap.mid( 1 );
+                    }
+                }
+            }
+        }
     }
 
     explicit WrappedString( QString longLine, LineLength visibleColumns )

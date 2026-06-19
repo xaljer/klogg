@@ -1029,18 +1029,19 @@ double AbstractLogView::verticalScrollMultiplicator() const
                      / static_cast<double>( logData_->getNbLine().get() );
 }
 
-void AbstractLogView::scrollContentsBy( int dx, int dy )
+void AbstractLogView::scrollContentsBy( int dx, int /*dy*/ )
 {
-    LOG_DEBUG << "scrollContentsBy received " << dy << "position " << verticalScrollBar()->value();
+    const auto scrollValue = verticalScrollBar()->value();
+    const auto scrollMax = verticalScrollBar()->maximum();
+    const auto scrollPosition = verticalScrollToLineNumber( scrollValue );
 
-    const auto lastTopLine = ( logData_->getNbLine() - getNbVisibleLines() );
+    // Determine if we're at the bottom by checking if scroll value >= maximum.
+    // This avoids the expensive getNbBottomWrappedVisibleLines() call on every scroll.
+    // The scroll range is already calculated correctly by updateScrollBars().
+    const bool atBottom = scrollMax > 0 && scrollValue >= scrollMax;
 
-    const auto scrollPosition = verticalScrollToLineNumber( verticalScrollBar()->value() );
-
-    if ( ( lastTopLine.get() > 0 ) && scrollPosition.get() > lastTopLine.get() ) {
-        // The user is going further than the last line, we need to lock the last line at the bottom
-        LOG_DEBUG << "scrollContentsBy beyond!";
-        firstLine_ = scrollPosition;
+    if ( atBottom ) {
+        firstLine_ = verticalScrollToLineNumber( scrollMax );
         lastLineAligned_ = true;
     }
     else {
@@ -1129,28 +1130,40 @@ void AbstractLogView::paintEvent( QPaintEvent* paintEvent )
     }
 
     QPainter devicePainter( viewport() );
-    int drawingTopPosition = -pullToFollowHeight;
-    int drawingPullToFollowTopPosition = drawingTopPosition + wholeHeight;
 
-    // This is to cover the special case where there is less than a screenful
-    // worth of data, we want to see the document from the top, rather than
-    // pushing the first couple of lines above the viewport.
-    if ( followElasticHook_.isHooked()
-         && ( logData_->getNbLine() + LinesCount( 1 ) < getNbVisibleLines() ) ) {
-        drawingTopOffset_ = 0;
-        drawingTopPosition += ( wholeHeight - viewport()->height() ) + PullToFollowHookedHeight;
+    // Calculate effective height for text wrapping and pull-to-follow bar positioning
+    const int effectiveHeight
+        = textAreaCache_.actual_height_ > 0 ? textAreaCache_.actual_height_ : wholeHeight;
+
+    drawingTopOffset_ = -pullToFollowHeight;
+    int drawingTopPosition = drawingTopOffset_;
+    int drawingPullToFollowTopPosition
+        = std::min( drawingTopPosition + effectiveHeight, viewport()->height() );
+
+    if ( shouldBottomAlignFrame() ) {
+        int hiddenHeightPx = std::max( 0, effectiveHeight - viewport()->height() );
+        const bool wrappedContentOverflows
+            = useTextWrap_ && textAreaCache_.actual_height_ > viewport()->height();
+        const bool contentFitsEmptyScrollRange
+            = verticalScrollBar()->maximum() == 0 && !wrappedContentOverflows;
+        drawingTopOffset_ = contentFitsEmptyScrollRange ? 0 : -hiddenHeightPx;
+        drawingTopPosition = drawingTopOffset_;
+
+        const int heightForPullToFollow = ( useTextWrap_ && textAreaCache_.actual_height_ > 0 )
+            ? textAreaCache_.actual_height_
+            : effectiveHeight;
+        const int maxPullToFollowTop
+            = std::max( 0, viewport()->height() - pullToFollowHeight );
         drawingPullToFollowTopPosition
-            = drawingTopPosition + viewport()->height() - PullToFollowHookedHeight;
-    }
-    // This is the case where the user is on the 'extra' slot at the end
-    // and is aligned on the last line (but no elastic shown)
-    else if ( lastLineAligned_ && !followElasticHook_.isHooked() ) {
-        drawingTopOffset_ = -( wholeHeight - viewport()->height() );
-        drawingTopPosition += drawingTopOffset_;
-        drawingPullToFollowTopPosition = drawingTopPosition + wholeHeight;
+            = std::min( drawingTopPosition + heightForPullToFollow, maxPullToFollowTop );
     }
     else {
         drawingTopOffset_ = -pullToFollowHeight;
+        drawingTopPosition = drawingTopOffset_;
+        const int maxPullToFollowTop
+            = std::max( 0, viewport()->height() - pullToFollowHeight );
+        drawingPullToFollowTopPosition
+            = std::min( drawingTopPosition + effectiveHeight, maxPullToFollowTop );
     }
 
     devicePainter.drawPixmap( 0, drawingTopPosition, textAreaCache_.pixmap_ );
@@ -1164,6 +1177,17 @@ void AbstractLogView::paintEvent( QPaintEvent* paintEvent )
               << std::chrono::duration_cast<std::chrono::microseconds>(
                      std::chrono::system_clock::now() - start )
                      .count();
+}
+
+bool AbstractLogView::shouldBottomAlignFrame() const
+{
+    if ( followElasticHook_.isHooked() || lastLineAligned_ ) {
+        return true;
+    }
+
+    const auto scrollValue = verticalScrollBar()->value();
+    const auto scrollMax = verticalScrollBar()->maximum();
+    return scrollMax > 0 && scrollValue >= scrollMax;
 }
 
 // These two functions are virtual and this implementation is clearly
@@ -2334,46 +2358,86 @@ void AbstractLogView::considerMouseHovering( int xPos, int yPos )
 LinesCount AbstractLogView::getNbBottomWrappedVisibleLines() const
 {
     const LinesCount visibleLines = getNbVisibleLines();
-    const LineLength visibleColumns = getNbVisibleCols();
-    if ( useTextWrap_ ) {
-        const auto totalLines = logData_->getNbLine();
-        LinesCount wrappedVisibleLines;
-        LinesCount unwrappedLines;
-        LineNumber unwrappedLineNumber{ logData_->getNbLine().get() - 1 };
-        while ( unwrappedLines < totalLines && unwrappedLines < visibleLines ) {
-            QString expandedLine = logData_->getExpandedLineString( unwrappedLineNumber );
-            WrappedString wrapped{ expandedLine, visibleColumns };
-            wrappedVisibleLines += LinesCount(
-                type_safe::narrow_cast<LinesCount::UnderlyingType>( wrapped.wrappedLinesCount() ) );
-            unwrappedLines++;
-            unwrappedLineNumber--;
-        }
 
-        LOG_INFO << "Bottom visible lines " << visibleLines.get() << " wrapped "
-                 << wrappedVisibleLines.get();
-        return wrappedVisibleLines;
-    }
-    else {
+    if ( !useTextWrap_ ) {
         return visibleLines;
     }
+
+    const LineLength visibleColumns = getNbVisibleCols();
+
+    const auto totalLines = logData_->getNbLine();
+    if ( totalLines.get() == 0 ) {
+        return LinesCount{ 0 };
+    }
+
+    if ( visibleColumns.get() <= 0 ) {
+        return visibleLines;
+    }
+
+    LinesCount wrappedLinesCount{ 0 };
+    LinesCount unwrappedLinesCount{ 0 };
+    LineNumber unwrappedLineNumber{ totalLines.get() - 1 };
+
+    static constexpr int ContentMarginWidth = 1;
+    const int availableWidth = viewport()->width() - leftMarginPx_ - ContentMarginWidth;
+    auto twFn = [this]( QStringView s ) -> int {
+        return textWidth( pixmapFontMetrics_, s );
+    };
+
+    while ( wrappedLinesCount < visibleLines ) {
+        QString expandedLine = logData_->getExpandedLineString( unwrappedLineNumber );
+        WrappedString wrapped{ expandedLine, availableWidth, twFn };
+        const auto thisLineWrappedCount = LinesCount(
+            type_safe::narrow_cast<LinesCount::UnderlyingType>( wrapped.wrappedLinesCount() ) );
+
+        if ( wrappedLinesCount + thisLineWrappedCount > visibleLines ) {
+            unwrappedLinesCount++;
+            wrappedLinesCount += thisLineWrappedCount;
+            break;
+        }
+
+        wrappedLinesCount += thisLineWrappedCount;
+        unwrappedLinesCount++;
+
+        if ( unwrappedLineNumber.get() == 0 ) {
+            break;
+        }
+        unwrappedLineNumber--;
+    }
+
+    if ( unwrappedLinesCount.get() == 0 && totalLines.get() > 0 ) {
+        return LinesCount{ 1 };
+    }
+
+    return unwrappedLinesCount;
 }
 
 void AbstractLogView::updateScrollBars()
 {
     const LinesCount visibleLines = getNbVisibleLines();
     const LineLength visibleColumns = getNbVisibleCols();
-    if ( logData_->getNbLine() < visibleLines ) {
+    const auto totalLines = logData_->getNbLine();
+    if ( totalLines < visibleLines ) {
         verticalScrollBar()->setRange( 0, 0 );
     }
     else {
-        const auto visibleWrappedLines = getNbBottomWrappedVisibleLines();
-        const auto wrappedLinesScrollAdjust = ( visibleWrappedLines - visibleLines ).get();
-
-        verticalScrollBar()->setRange(
-            0, static_cast<int>( std::min( logData_->getNbLine().get() - visibleLines.get()
-                                               + LinesCount::UnderlyingType{ 1 }
-                                               + wrappedLinesScrollAdjust,
-                                           maxValue<LinesCount>().get() ) ) );
+        if ( useTextWrap_ ) {
+            const auto unwrappedLinesAtBottom = getNbBottomWrappedVisibleLines();
+            if ( totalLines > unwrappedLinesAtBottom ) {
+                verticalScrollBar()->setRange(
+                    0, static_cast<int>( std::min( ( totalLines - unwrappedLinesAtBottom ).get(),
+                                                    maxValue<LinesCount>().get() ) ) );
+            }
+            else {
+                verticalScrollBar()->setRange( 0, 0 );
+            }
+        }
+        else {
+            verticalScrollBar()->setRange(
+                0, static_cast<int>( std::min( totalLines.get() - visibleLines.get()
+                                                   + LinesCount::UnderlyingType{ 1 },
+                                               maxValue<LinesCount>().get() ) ) );
+        }
     }
 
     int64_t hScrollMaxValue = 0;
@@ -2607,6 +2671,7 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
 
     // Position in pixel of the base line of the line to print
     int yPos = 0;
+    textAreaCache_.actual_height_ = 0;
     wrappedLinesInfo_.clear();
     klogg::vector<std::pair<QColor, QColor>> highlightColors;
     for ( auto currentLine = 0_lcount; currentLine < nbLines; ++currentLine ) {
@@ -2818,6 +2883,8 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
                     << " with codes)";
     }
 #endif
+
+    textAreaCache_.actual_height_ = yPos;
 }
 
 // Draw the "pull to follow" bar and return a pixmap.

@@ -37,6 +37,7 @@
  */
 
 #include <QColorDialog>
+#include <QFileDialog>
 #include <QInputDialog>
 #include <QKeySequenceEdit>
 #include <QLineEdit>
@@ -122,6 +123,9 @@ OptionsDialog::OptionsDialog( QWidget* parent )
 
     connect( extractArchivesCheckBox, &QCheckBox::toggled,
              [ this ]( auto ) { this->setupArchives(); } );
+
+    connect( tempDirectoryBrowseButton, &QPushButton::clicked, this,
+             &OptionsDialog::browseTempDirectory );
 
     connect( mainSearchColorButton, &QPushButton::clicked, this, &OptionsDialog::changeMainColor );
     mainSearchColorButton->setToolTip( tr( "Managed by current theme in Colors & Themes." ) );
@@ -808,6 +812,8 @@ void OptionsDialog::updateDialogFromConfig()
     extractArchivesCheckBox->setChecked( config.extractArchives() );
     extractArchivesAlwaysCheckBox->setChecked( config.extractArchivesAlways() );
 
+    tempDirectoryLineEdit->setText( config.tempDirectory() );
+
     // Perf
     parallelSearchCheckBox->setChecked( config.useParallelSearch() );
     searchResultsCacheCheckBox->setChecked( config.useSearchResultsCache() );
@@ -899,6 +905,15 @@ void OptionsDialog::changeQfColor()
                 = newColor.name( QColor::HexArgb );
             applyThemePaletteToButtons( selectedThemeName_ );
         }
+    }
+}
+
+void OptionsDialog::browseTempDirectory()
+{
+    const QString dir = QFileDialog::getExistingDirectory(
+        this, tr( "Select temporary folder" ), tempDirectoryLineEdit->text() );
+    if ( !dir.isEmpty() ) {
+        tempDirectoryLineEdit->setText( dir );
     }
 }
 
@@ -1110,6 +1125,8 @@ void OptionsDialog::updateConfigFromDialog()
 
     config.setExtractArchives( extractArchivesCheckBox->isChecked() );
     config.setExtractArchivesAlways( extractArchivesAlwaysCheckBox->isChecked() );
+
+    config.setTempDirectory( tempDirectoryLineEdit->text().trimmed() );
 
     config.setUseParallelSearch( parallelSearchCheckBox->isChecked() );
     config.setUseSearchResultsCache( searchResultsCacheCheckBox->isChecked() );

@@ -48,6 +48,7 @@
 #include <array>
 #include <memory>
 #include <mutex>
+#include <vector>
 
 #include "configuration.h"
 #include "crawlerwidget.h"
@@ -222,6 +223,7 @@ class MainWindow : public QMainWindow {
     void removeFromFavorites( const QString& pathToRemove );
     void removeFromRecent( const QString& pathToRemove );
     void tryOpenClipboard( int tryTimes );
+    static QString currentTempRoot();
     void updateShortcuts();
 
     void updateRecordActionState();
@@ -330,7 +332,8 @@ class MainWindow : public QMainWindow {
     QMap<QString, QString> recorderBindings_;
     QString recordingFileName_;
 
-    QTemporaryDir tempDir_;
+    // Temp dirs created by archive extraction; kept alive until window close.
+    std::vector<std::unique_ptr<QTemporaryDir>> archiveDirs_;
 
     // Global chip mode state (shared across all crawlers)
     bool globalChipMode_ = false;

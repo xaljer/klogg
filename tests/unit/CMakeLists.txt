@@ -5,6 +5,7 @@ add_executable(klogg_tests
     patternmatcher_test.cpp
     recorder_test.cpp
     wrappedstring_test.cpp
+    tempdir_test.cpp
     tests_main.cpp
 )
 

@@ -59,6 +59,7 @@
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
@@ -105,6 +106,7 @@
 #include "shortcuts.h"
 #include "styles.h"
 #include "tabbedcrawlerwidget.h"
+#include "tempdir.h"
 
 namespace {
 
@@ -128,7 +130,6 @@ MainWindow::MainWindow( WindowSession session )
     , quickFindMux_( session_.getQuickFindPattern() )
     , mainTabWidget_()
     , recorderManager_( this )
-    , tempDir_( QDir::temp().filePath( "klogg_temp_" ) )
 {
     createActions();
     createMenus();
@@ -1102,7 +1103,8 @@ void MainWindow::openRemoteFile( const QUrl& url )
     connect( &downloader, &Downloader::finished,
              [ &progressDialog ]( bool isOk ) { progressDialog.done( isOk ? 0 : 1 ); } );
 
-    auto tempFile = new QTemporaryFile( tempDir_.filePath( url.fileName() ), this );
+    auto tempFile = new QTemporaryFile(
+        QDir( currentTempRoot() ).filePath( url.fileName() ), this );
     if ( tempFile->open() ) {
         downloader.download( url, tempFile );
         if ( !progressDialog.exec() ) {
@@ -1268,6 +1270,12 @@ void MainWindow::openInEditor()
     openFileInDefaultApplication( session_.getFilename( currentCrawlerWidget() ) );
 }
 
+QString MainWindow::currentTempRoot()
+{
+    return klogg::resolveTempRoot( Configuration::get().tempDirectory(),
+                                   QDir::temp().absolutePath() );
+}
+
 void MainWindow::tryOpenClipboard( int tryTimes )
 {
     auto clipboard = QGuiApplication::clipboard();
@@ -1277,7 +1285,8 @@ void MainWindow::tryOpenClipboard( int tryTimes )
         QTimer::singleShot( 50, [ tryTimes, this ]() { tryOpenClipboard( tryTimes - 1 ); } );
     }
     else {
-        auto tempFile = new QTemporaryFile( tempDir_.filePath( "klogg_clipboard" ), this );
+        auto tempFile = new QTemporaryFile(
+            QDir( currentTempRoot() ).filePath( "klogg_clipboard" ), this );
         if ( tempFile->open() ) {
             tempFile->write( text.toUtf8() );
             tempFile->flush();
@@ -1824,7 +1833,7 @@ bool MainWindow::extractAndLoadFile( const QString& fileName )
     if ( decompressAction == DecompressAction::Decompress ) {
 
         auto tempFile = new QTemporaryFile(
-            this->tempDir_.filePath( QFileInfo( fileName ).fileName() ), this );
+            QDir( currentTempRoot() ).filePath( QFileInfo( fileName ).fileName() ), this );
 
         if ( tempFile->open() && decompressor.decompress( fileName, tempFile, decompressInterrupt )
              && !progressDialog.exec() ) {
@@ -1842,9 +1851,11 @@ bool MainWindow::extractAndLoadFile( const QString& fileName )
         }
     }
     else if ( decompressAction == DecompressAction::Extract ) {
-        QTemporaryDir archiveDir{ this->tempDir_.filePath( QFileInfo( fileName ).fileName() ) };
-        archiveDir.setAutoRemove( false );
-        if ( decompressor.extract( fileName, archiveDir.path(), decompressInterrupt )
+        auto archiveDirPtr = std::make_unique<QTemporaryDir>(
+            QDir( currentTempRoot() ).filePath( QFileInfo( fileName ).fileName() ) );
+        const QString archiveDirPath = archiveDirPtr->path();
+        archiveDirs_.push_back( std::move( archiveDirPtr ) );
+        if ( decompressor.extract( fileName, archiveDirPath, decompressInterrupt )
              && !progressDialog.exec() ) {
 
             if ( decompressInterrupt ) {
@@ -1852,7 +1863,7 @@ bool MainWindow::extractAndLoadFile( const QString& fileName )
             }
 
             const auto selectedFiles = QFileDialog::getOpenFileNames(
-                this, tr( "Open file from archive" ), archiveDir.path(), tr( "All files (*)" ) );
+                this, tr( "Open file from archive" ), archiveDirPath, tr( "All files (*)" ) );
 
             for ( const auto& extractedFile : selectedFiles ) {
                 this->loadFile( extractedFile );

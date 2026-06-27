@@ -1180,6 +1180,26 @@
         <translation>Extract archives without confirmation</translation>
     </message>
     <message>
+        <source>Temporary files</source>
+        <translation>Temporary files</translation>
+    </message>
+    <message>
+        <source>Temporary folder:</source>
+        <translation>Temporary folder:</translation>
+    </message>
+    <message>
+        <source>Browse...</source>
+        <translation>Browse...</translation>
+    </message>
+    <message>
+        <source>Leave empty to use the system temporary folder.</source>
+        <translation>Leave empty to use the system temporary folder.</translation>
+    </message>
+    <message>
+        <source>Select temporary folder</source>
+        <translation>Select temporary folder</translation>
+    </message>
+    <message>
         <location filename="../../ui/include/optionsdialog.ui" line="589"/>
         <source>File download</source>
         <translation>File download</translation>

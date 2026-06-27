@@ -635,6 +635,36 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="tempFilesGroupBox">
+         <property name="title">
+          <string>Temporary files</string>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_tempFiles">
+          <item>
+           <widget class="QLabel" name="tempDirectoryLabel">
+            <property name="text">
+             <string>Temporary folder:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="tempDirectoryLineEdit">
+            <property name="toolTip">
+             <string>Leave empty to use the system temporary folder.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="tempDirectoryBrowseButton">
+            <property name="text">
+             <string>Browse...</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="downloadGroupBox">
          <property name="title">
           <string>File download</string>

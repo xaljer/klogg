@@ -246,6 +246,9 @@ void Configuration::retrieveFromStorage( QSettings& settings )
         = settings.value( "archives.extractAlways", DefaultConfiguration.extractArchivesAlways_ )
               .toBool();
 
+    tempDirectory_
+        = settings.value( "files.temp_directory", DefaultConfiguration.tempDirectory_ ).toString();
+
     // "Perf" settings
     useParallelSearch_
         = settings.value( "perf.useParallelSearch", DefaultConfiguration.useParallelSearch_ )
@@ -509,6 +512,8 @@ void Configuration::saveToStorage( QSettings& settings ) const
 
     settings.setValue( "archives.extract", extractArchives_ );
     settings.setValue( "archives.extractAlways", extractArchivesAlways_ );
+
+    settings.setValue( "files.temp_directory", tempDirectory_ );
 
     settings.setValue( "perf.useParallelSearch", useParallelSearch_ );
     settings.setValue( "perf.useSearchResultsCache", useSearchResultsCache_ );

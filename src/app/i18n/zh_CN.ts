@@ -1180,6 +1180,26 @@
         <translation type="unfinished">无需确认即可提取档案</translation>
     </message>
     <message>
+        <source>Temporary files</source>
+        <translation>临时文件</translation>
+    </message>
+    <message>
+        <source>Temporary folder:</source>
+        <translation>临时文件夹：</translation>
+    </message>
+    <message>
+        <source>Browse...</source>
+        <translation>浏览...</translation>
+    </message>
+    <message>
+        <source>Leave empty to use the system temporary folder.</source>
+        <translation>留空则使用系统临时文件夹。</translation>
+    </message>
+    <message>
+        <source>Select temporary folder</source>
+        <translation>选择临时文件夹</translation>
+    </message>
+    <message>
         <location filename="../../ui/include/optionsdialog.ui" line="589"/>
         <source>File download</source>
         <translation>文件下载</translation>

@@ -385,6 +385,15 @@ class Configuration final : public Persistable<Configuration> {
         extractArchivesAlways_ = extract;
     }
 
+    QString tempDirectory() const
+    {
+        return tempDirectory_;
+    }
+    void setTempDirectory( QString path )
+    {
+        tempDirectory_ = path;
+    }
+
     bool verifySslPeers() const
     {
         return verifySslPeers_;
@@ -706,6 +715,8 @@ class Configuration final : public Persistable<Configuration> {
 
     bool extractArchives_ = true;
     bool extractArchivesAlways_ = true;
+
+    QString tempDirectory_; // empty => use system temp folder
 
     bool verifySslPeers_ = true;
 

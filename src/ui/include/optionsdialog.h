@@ -98,6 +98,8 @@ class OptionsDialog : public QDialog, public Ui::OptionsDialog {
     void resetCurrentThemePalette();
     void createThemeFromCurrent();
 
+    void browseTempDirectory();
+
     void checkShortcutsOnDuplicate() const;
 
   private:

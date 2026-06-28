@@ -825,17 +825,28 @@ void CrawlerWidget::matchCaseChangedHandler( bool shouldMatchCase )
 
 void CrawlerWidget::booleanCombiningChangedHandler( bool )
 {
+    if ( patternInputWidget_->isChipMode() ) {
+        patternInputWidget_->setNotButtonVisible( booleanButton_->isChecked() );
+    }
+    patternInputWidget_->setBooleanMode( booleanButton_->isChecked() );
+    // Manual toggle clears auto-enabled state
+    booleanAutoEnabled_ = false;
     resetStateOnSearchPatternChanges();
 }
 
 void CrawlerWidget::useRegexpChangeHandler( bool )
 {
     patternInputWidget_->setRegexMode( useRegexpButton_->isChecked() );
+    patternInputWidget_->setBooleanMode( booleanButton_->isChecked() );
     resetStateOnSearchPatternChanges();
 }
 
 void CrawlerWidget::searchTextChangeHandler( QString )
 {
+    if ( !patternInputWidget_->isChipMode() ) {
+        const auto text = searchLineEdit_->lineEdit()->text();
+        chipModeButton_->setEnabled( PatternInputWidget::canParseToChips( text ) );
+    }
     resetStateOnSearchPatternChanges();
     updatePredefinedFiltersWidget();
 }
@@ -856,21 +867,21 @@ void CrawlerWidget::changeFilteredViewVisibility( int index )
 void CrawlerWidget::setSearchPatternFromPredefinedFilters( const QList<PredefinedFilter>& filters )
 {
     QString searchPattern;
-    QStringList chipPatterns;
-    chipPatterns.reserve( filters.size() );
+    QVector<Chip> chipList;
+    chipList.reserve( filters.size() );
 
     for ( const auto& filter : filters ) {
         const auto escapedPattern = escapeSearchPattern( filter.pattern, filter.useRegex );
         combinePatterns( searchPattern, escapedPattern );
-        const auto chipPattern = useRegexpButton_->isChecked() && !filter.useRegex
-                                     ? QRegularExpression::escape( filter.pattern )
-                                     : filter.pattern;
-        chipPatterns.append( chipPattern );
+        const auto chipPatternText = useRegexpButton_->isChecked() && !filter.useRegex
+                                         ? QRegularExpression::escape( filter.pattern )
+                                         : filter.pattern;
+        chipList.append( Chip{ ChipType::Or, { chipPatternText } } );
     }
 
     if ( patternInputWidget_->isChipMode() ) {
         searchLineEdit_->setEditText( searchPattern );
-        patternInputWidget_->setPatterns( chipPatterns );
+        patternInputWidget_->setChips( chipList );
         updatePredefinedFiltersWidget();
         focusSearchEdit();
 
@@ -900,12 +911,7 @@ QString CrawlerWidget::escapeSearchPattern( const QString& pattern, bool isRegex
 QString& CrawlerWidget::combinePatterns( QString& currentPattern, const QString& newPattern ) const
 {
     if ( !currentPattern.isEmpty() ) {
-        if ( booleanButton_->isChecked() ) {
-            currentPattern.append( " or " );
-        }
-        else if ( useRegexpButton_->isChecked() ) {
-            currentPattern.append( '|' );
-        }
+        currentPattern.append( QStringLiteral( " or " ) );
     }
 
     currentPattern.append( newPattern );
@@ -915,18 +921,47 @@ QString& CrawlerWidget::combinePatterns( QString& currentPattern, const QString&
 
 void CrawlerWidget::addToSearch( const QString& searchString )
 {
+    if ( patternInputWidget_->isChipMode() ) {
+        Chip newChip{ ChipType::Or, { searchString } };
+        auto chips = patternInputWidget_->chips();
+        chips.append( newChip );
+        patternInputWidget_->setChips( chips );
+        if ( Configuration::get().autoRunSearchOnPatternChange() ) {
+            dispatchToMainThread( [ this ] { startNewSearch(); } );
+        }
+        return;
+    }
+
     const auto newPattern = escapeSearchPattern( searchString );
-    QString currentPattern
-        = patternInputWidget_->isChipMode() ? patternInputWidget_->text()
-                                            : searchLineEdit_->currentText();
+    QString currentPattern = searchLineEdit_->currentText();
     setSearchPattern( combinePatterns( currentPattern, newPattern ) );
 }
 
 void CrawlerWidget::excludeFromSearch( const QString& searchString )
 {
-    QString currentPattern
-        = patternInputWidget_->isChipMode() ? patternInputWidget_->text()
-                                            : searchLineEdit_->currentText();
+    if ( patternInputWidget_->isChipMode() ) {
+        // Chip mode path: add NOT chip directly (raw text, quoting handled by combinePatterns)
+        auto chips = patternInputWidget_->chips();
+        chips.append( Chip{ ChipType::Not, { searchString } } );
+
+        // Auto-enable boolean mode
+        if ( !booleanButton_->isChecked() ) {
+            booleanButton_->setChecked( true );
+            booleanAutoEnabled_ = true;
+        }
+
+        patternInputWidget_->setChips( chips );
+        updatePredefinedFiltersWidget();
+        focusSearchEdit();
+
+        if ( Configuration::get().autoRunSearchOnPatternChange() ) {
+            dispatchToMainThread( [ this ] { startNewSearch(); } );
+        }
+        return;
+    }
+
+    // Text mode path: construct boolean expression
+    QString currentPattern = searchLineEdit_->currentText();
 
     const auto wasInBooleanCombinationMode = booleanButton_->isChecked();
     if ( !wasInBooleanCombinationMode ) {
@@ -966,32 +1001,53 @@ void CrawlerWidget::setSearchPattern( const QString& searchPattern )
 QString CrawlerWidget::getCurrentSearchText() const
 {
     if ( patternInputWidget_->isChipMode() ) {
-        const auto patterns = patternInputWidget_->patterns();
-
-        if ( !useRegexpButton_->isChecked() && patterns.size() > 1 ) {
-            QString combinedPattern;
-            for ( const auto& pattern : patterns ) {
-                if ( !combinedPattern.isEmpty() ) {
-                    combinedPattern.append( QStringLiteral( " or " ) );
-                }
-                combinedPattern.append( escapeSearchPattern( pattern ) );
-            }
-
-            return combinedPattern;
-        }
-
         return patternInputWidget_->text();
     }
-    return searchLineEdit_->currentText();
+    return searchLineEdit_->lineEdit()->text();
 }
 
 void CrawlerWidget::setChipMode( bool enabled )
 {
     patternInputWidget_->setRegexMode( useRegexpButton_->isChecked() );
-    patternInputWidget_->setChipMode( enabled );
+    patternInputWidget_->setBooleanMode( booleanButton_->isChecked() );
+
     if ( enabled ) {
-        patternInputWidget_->setText( searchLineEdit_->currentText() );
-        // Set up search history completer on the chip mode input
+        // Determine text to parse
+        QString textToParse;
+        if ( !lastChipExpression_.isEmpty() ) {
+            textToParse = std::exchange( lastChipExpression_, {} );
+        }
+        else {
+            textToParse = searchLineEdit_->lineEdit()->text();
+        }
+
+        if ( !textToParse.isEmpty() && !PatternInputWidget::canParseToChips( textToParse ) ) {
+            chipModeButton_->blockSignals( true );
+            chipModeButton_->setChecked( false );
+            chipModeButton_->blockSignals( false );
+            chipModeButton_->setEnabled( false );
+            return;
+        }
+
+        // Switch widget to chip mode UI, then populate chips from text
+        patternInputWidget_->setChipMode( true );
+        if ( !textToParse.isEmpty() ) {
+            patternInputWidget_->setText( textToParse );
+        }
+    }
+    else {
+        // Save expression before turning off
+        lastChipExpression_ = patternInputWidget_->text();
+        patternInputWidget_->setChipMode( false );
+    }
+
+    // Sync button state
+    chipModeButton_->blockSignals( true );
+    chipModeButton_->setChecked( enabled );
+    chipModeButton_->blockSignals( false );
+
+    if ( enabled ) {
+        patternInputWidget_->setNotButtonVisible( booleanButton_->isChecked() );
         patternInputWidget_->setSearchCompleter( searchLineCompleter_ );
         if ( !chipHistoryConnection_ ) {
             chipHistoryConnection_ = connect(
@@ -1010,8 +1066,9 @@ void CrawlerWidget::setChipMode( bool enabled )
         setFocusProxy( patternInputWidget_ );
     }
     else {
+        chipModeButton_->setEnabled( true );
         disconnect( chipHistoryConnection_ );
-        searchLineEdit_->setEditText( patternInputWidget_->text() );
+        searchLineEdit_->setEditText( lastChipExpression_ );
         searchLineEdit_->setCompleter( searchLineCompleter_ );
         patternInputWidget_->hide();
         searchLineEdit_->show();
@@ -1175,6 +1232,13 @@ void CrawlerWidget::setup()
     searchRefreshButton_->setFocusPolicy( Qt::NoFocus );
     searchRefreshButton_->setContentsMargins( 2, 2, 2, 2 );
 
+    chipModeButton_ = new QToolButton();
+    chipModeButton_->setToolTip( tr( "Toggle chip input mode" ) );
+    chipModeButton_->setText( QStringLiteral( "Chip" ) );
+    chipModeButton_->setCheckable( true );
+    chipModeButton_->setFocusPolicy( Qt::NoFocus );
+    chipModeButton_->setContentsMargins( 2, 2, 2, 2 );
+
     // Construct the Search line
     searchLineCompleter_ = new QCompleter( savedSearches_->recentSearches(), this );
     searchLineEdit_ = new QComboBox;
@@ -1245,6 +1309,7 @@ void CrawlerWidget::setup()
     searchLineLayout->addWidget( inverseButton_ );
     searchLineLayout->addWidget( booleanButton_ );
     searchLineLayout->addWidget( searchRefreshButton_ );
+    searchLineLayout->addWidget( chipModeButton_ );
     searchLineLayout->addWidget( predefinedFilters_ );
     searchLineLayout->addWidget( searchLineEdit_ );
     searchLineLayout->addWidget( patternInputWidget_ );
@@ -1315,19 +1380,51 @@ void CrawlerWidget::setup()
     connect( stopButton_, &QToolButton::clicked, this, &CrawlerWidget::stopSearch );
     connect( clearButton_, &QToolButton::clicked, searchLineEdit_, &QComboBox::clearEditText );
     connect( clearButton_, &QToolButton::clicked, patternInputWidget_, &PatternInputWidget::clear );
+    connect( chipModeButton_, &QToolButton::toggled, this, &CrawlerWidget::setChipMode );
 
     connect( patternInputWidget_, &PatternInputWidget::textChanged, this,
              &CrawlerWidget::searchTextChangeHandler );
     connect( patternInputWidget_, &PatternInputWidget::returnPressed, searchButton_,
              &QToolButton::click );
     connect( patternInputWidget_, &PatternInputWidget::chipChanged, this,
-             [ this ]( const QString& ) {
-                 resetStateOnSearchPatternChanges();
-                 updatePredefinedFiltersWidget();
-                 if ( Configuration::get().autoRunSearchOnPatternChange() ) {
-                     dispatchToMainThread( [ this ] { startNewSearch(); } );
-                 }
-             } );
+              [ this ]( const QString& ) {
+                  if ( patternInputWidget_->isChipMode() ) {
+                      const auto chips = patternInputWidget_->chips();
+                      const bool hasExclude = std::any_of(
+                          chips.cbegin(), chips.cend(),
+                          []( const Chip& c ) { return c.type == ChipType::Not
+                                                     || c.type == ChipType::NotAndGroup; } );
+                      const bool hasAndGroup = std::any_of(
+                          chips.cbegin(), chips.cend(),
+                          []( const Chip& c ) { return c.type == ChipType::AndGroup; } );
+
+                      if ( hasExclude || hasAndGroup ) {
+                          if ( !booleanButton_->isChecked() ) {
+                              booleanButton_->setChecked( true );
+                              booleanAutoEnabled_ = true;
+                          }
+                      }
+                      else if ( booleanAutoEnabled_ && !hasExclude && !hasAndGroup ) {
+                          booleanButton_->setChecked( false );
+                          booleanAutoEnabled_ = false;
+                      }
+                  }
+
+                  resetStateOnSearchPatternChanges();
+                  updatePredefinedFiltersWidget();
+                  if ( Configuration::get().autoRunSearchOnPatternChange() ) {
+                      dispatchToMainThread( [ this ] { startNewSearch(); } );
+                  }
+              } );
+
+    connect( patternInputWidget_, &PatternInputWidget::notButtonToggled, this,
+              [ this ]( bool ) {
+                  // NOT button pressed — auto-enable boolean if needed
+                  if ( patternInputWidget_->isChipMode() && !booleanButton_->isChecked() ) {
+                      booleanButton_->setChecked( true );
+                      booleanAutoEnabled_ = true;
+                  }
+              } );
 
     connect( patternInputWidget_, &PatternInputWidget::contextMenuRequested, this,
              [ this ]( const QPoint& globalPos ) {
@@ -1780,7 +1877,7 @@ void CrawlerWidget::replaceCurrentSearch( const QString& searchText )
     overview_.updateData( logData_->getNbLine() );
 
     if ( !searchText.isEmpty() ) {
-        const auto chipPatterns = patternInputWidget_->patterns();
+        const auto chipPatterns = patternInputWidget_->chips();
         const auto shouldUseBooleanCombining
             = booleanButton_->isChecked()
               || ( patternInputWidget_->isChipMode() && !useRegexpButton_->isChecked()

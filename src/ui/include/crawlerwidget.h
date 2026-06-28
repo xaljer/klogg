@@ -409,6 +409,10 @@ class CrawlerWidget : public QSplitter,
     QToolButton* inverseButton_;
     QToolButton* booleanButton_;
     QToolButton* searchRefreshButton_;
+    QToolButton* chipModeButton_ = nullptr;
+
+    bool booleanAutoEnabled_ = false;
+    QString lastChipExpression_;
 
     std::map<QString, QShortcut*> shortcuts_;
 

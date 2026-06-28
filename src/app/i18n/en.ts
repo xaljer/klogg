@@ -2423,4 +2423,22 @@
         <translation>klogg log viewer</translation>
     </message>
 </context>
+<context>
+    <name>PatternInputWidget</name>
+    <message>
+        <location filename="../../ui/src/patterninputwidget.cpp" line="120"/>
+        <source>NOT</source>
+        <translation>NOT</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/patterninputwidget.cpp" line="122"/>
+        <source>Toggle to add exclude pattern</source>
+        <translation>Toggle to add exclude pattern</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/patterninputwidget.cpp" line="166"/>
+        <source>Search history</source>
+        <translation>Search history</translation>
+    </message>
+</context>
 </TS>

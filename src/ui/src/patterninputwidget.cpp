@@ -31,6 +31,9 @@
 #include <QTimer>
 #include <QToolButton>
 #include <QPushButton>
+#include <QRegularExpression>
+
+#include "log.h"
 
 namespace {
 
@@ -38,7 +41,53 @@ const int ChipRadius = 12;
 const int ChipMargin = 4;
 const int ChipPadding = 8;
 const int ChipHeight = 24;
-const int MinEditWidth = 150;
+const int MinEditWidth = 120;
+
+QColor deriveColor( const QColor& base, int hueShift, int satAdjust = 0, int lightAdjust = 0 )
+{
+    int h, s, l, a;
+    base.getHsl( &h, &s, &l, &a );
+    h = ( h + hueShift ) % 360;
+    if ( h < 0 ) {
+        h += 360;
+    }
+    s = std::clamp( s + satAdjust, 0, 255 );
+    l = std::clamp( l + lightAdjust, 0, 255 );
+    QColor result;
+    result.setHsl( h, s, l, a );
+    return result;
+}
+
+QString chipDisplayText( const Chip& chip )
+{
+    switch ( chip.type ) {
+    case ChipType::Or:
+        return chip.terms.value( 0 );
+    case ChipType::AndGroup:
+        return chip.terms.join( QStringLiteral( " & " ) );
+    case ChipType::Not:
+        return QStringLiteral( "NOT " ) + chip.terms.value( 0 );
+    case ChipType::NotAndGroup:
+        return chip.terms.join( QStringLiteral( " & " ) );
+    }
+    return {};
+}
+
+QString chipPropertyText( const Chip& chip )
+{
+    // Used for chipText property (identification in remove/edit)
+    switch ( chip.type ) {
+    case ChipType::Or:
+        return chip.terms.value( 0 );
+    case ChipType::AndGroup:
+        return chip.terms.join( QLatin1Char( '&' ) );
+    case ChipType::Not:
+        return QStringLiteral( "!" ) + chip.terms.value( 0 );
+    case ChipType::NotAndGroup:
+        return QStringLiteral( "!" ) + chip.terms.join( QLatin1Char( '&' ) );
+    }
+    return {};
+}
 
 } // namespace
 
@@ -52,7 +101,6 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
     mainLayout_->setContentsMargins( 0, 0, 0, 0 );
     mainLayout_->setSpacing( 0 );
 
-    // Scroll area for chips and input
     chipsScrollArea_ = new QScrollArea( this );
     chipsScrollArea_->setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Fixed );
     chipsScrollArea_->setFixedHeight( ChipHeight );
@@ -63,7 +111,6 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
     chipsScrollArea_->setStyleSheet( "QScrollArea { background: transparent; }" );
     mainLayout_->addWidget( chipsScrollArea_, 1 );
 
-    // Chips container inside scroll area (includes chips + line edit)
     chipsContainer_ = new QWidget();
     chipsContainer_->setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Fixed );
     chipsContainer_->setFixedHeight( ChipHeight );
@@ -75,7 +122,21 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
     chipsLayout_->setSizeConstraint( QLayout::SetMinAndMaxSize );
     chipsScrollArea_->setWidget( chipsContainer_ );
 
-    // Line edit for input - placed inside chips layout to follow chips
+    // NOT toggle button — placed before the input
+    notButton_ = new QToolButton( chipsContainer_ );
+    notButton_->setText( tr( "NOT" ) );
+    notButton_->setCheckable( true );
+    notButton_->setFixedHeight( ChipHeight );
+    notButton_->setToolTip( tr( "Toggle to add exclude pattern" ) );
+    notButton_->setStyleSheet(
+        "QToolButton { border: none; border-radius: 10px; padding: 0 8px; "
+        "font-size: 10px; font-weight: bold; background: transparent; color: #888; }"
+        "QToolButton:hover { color: #ccc; }"
+        "QToolButton:checked { background: #6b2020; color: #fff; }" );
+    notButton_->hide();
+    chipsLayout_->addWidget( notButton_ );
+    connect( notButton_, &QToolButton::clicked, this, &PatternInputWidget::onNotButtonClicked );
+
     lineEdit_ = new QLineEdit( chipsContainer_ );
     lineEdit_->setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Fixed );
     lineEdit_->setMinimumWidth( MinEditWidth );
@@ -86,7 +147,8 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
     chipsLayout_->addWidget( lineEdit_, 1 );
 
     connect( lineEdit_, &QLineEdit::textChanged, this, &PatternInputWidget::onLineEditTextChanged );
-    connect( lineEdit_, &QLineEdit::returnPressed, this, &PatternInputWidget::onLineEditReturnPressed );
+    connect( lineEdit_, &QLineEdit::returnPressed, this,
+             &PatternInputWidget::onLineEditReturnPressed );
 
     lineEdit_->setContextMenuPolicy( Qt::CustomContextMenu );
     connect( lineEdit_, &QWidget::customContextMenuRequested, this,
@@ -99,7 +161,6 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
                  Q_EMIT contextMenuRequested( chipsScrollArea_->mapToGlobal( pos ) );
              } );
 
-    // History dropdown button (visible in chip mode)
     historyButton_ = new QToolButton( this );
     historyButton_->setText( QString( QChar( 0x25BE ) ) );
     historyButton_->setFixedSize( 16, ChipHeight );
@@ -108,7 +169,8 @@ PatternInputWidget::PatternInputWidget( QWidget* parent )
     historyButton_->hide();
     mainLayout_->addWidget( historyButton_ );
 
-    connect( historyButton_, &QToolButton::clicked, this, &PatternInputWidget::showHistoryMenu );
+    connect( historyButton_, &QToolButton::clicked, this,
+             &PatternInputWidget::showHistoryMenu );
 }
 
 QString PatternInputWidget::text() const
@@ -132,16 +194,13 @@ void PatternInputWidget::setText( const QString& text )
     }
 }
 
-void PatternInputWidget::setPatterns( const QStringList& patterns )
+void PatternInputWidget::setChips( const QVector<Chip>& chips )
 {
     if ( isChipMode_ ) {
-        patterns_.clear();
-        for ( const auto& p : patterns ) {
-            const auto parts = splitPattern( p );
-            for ( const auto& part : parts ) {
-                if ( !part.isEmpty() && !patterns_.contains( part ) ) {
-                    patterns_.append( part );
-                }
+        chips_.clear();
+        for ( const auto& chip : chips ) {
+            if ( !chip.terms.isEmpty() && !chip.terms.first().isEmpty() ) {
+                chips_.append( chip );
             }
         }
         updateChips();
@@ -149,18 +208,19 @@ void PatternInputWidget::setPatterns( const QStringList& patterns )
         scrollToEnd();
     }
     else {
-        lineEdit_->setText( patterns.join( isRegexMode_ ? QLatin1String( "|" )
-                                                          : QStringLiteral( " or " ) ) );
+        lineEdit_->setText( combinePatterns() );
     }
 }
 
-QStringList PatternInputWidget::patterns() const
+QVector<Chip> PatternInputWidget::chips() const
 {
     if ( isChipMode_ ) {
-        return patterns_;
+        return chips_;
     }
-
-    return lineEdit_->text().isEmpty() ? QStringList{} : QStringList{ lineEdit_->text() };
+    if ( lineEdit_->text().isEmpty() ) {
+        return {};
+    }
+    return { Chip{ ChipType::Or, { lineEdit_->text() } } };
 }
 
 void PatternInputWidget::setPlaceholderText( const QString& placeholder )
@@ -188,6 +248,16 @@ bool PatternInputWidget::isRegexMode() const
     return isRegexMode_;
 }
 
+void PatternInputWidget::setBooleanMode( bool isBoolean )
+{
+    isBooleanMode_ = isBoolean;
+}
+
+bool PatternInputWidget::isBooleanMode() const
+{
+    return isBooleanMode_;
+}
+
 void PatternInputWidget::setReadOnly( bool readOnly )
 {
     isReadOnly_ = readOnly;
@@ -206,17 +276,17 @@ bool PatternInputWidget::isReadOnly() const
 void PatternInputWidget::clear()
 {
     lineEdit_->clear();
-    patterns_.clear();
+    chips_.clear();
     clearChips();
 }
 
 void PatternInputWidget::clearChips()
 {
-    // Remove chip widgets but keep lineEdit_ in the layout
     QList<QWidget*> chipsToRemove;
     for ( int i = 0; i < chipsLayout_->count(); ++i ) {
         QLayoutItem* item = chipsLayout_->itemAt( i );
-        if ( item && item->widget() && item->widget() != lineEdit_ ) {
+        if ( item && item->widget() && item->widget() != lineEdit_
+             && item->widget() != notButton_ ) {
             chipsToRemove.append( item->widget() );
         }
     }
@@ -234,23 +304,25 @@ void PatternInputWidget::setChipMode( bool chipMode )
         isChipMode_ = chipMode;
 
         if ( chipMode ) {
-            const QString currentText = lineEdit_->text();
-            if ( !currentText.isEmpty() ) {
-                parsePatterns( currentText );
-                updateChips();
-                lineEdit_->clear();
-            }
+            // UI setup only — caller is responsible for setText()
             lineEdit_->setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Fixed );
             lineEdit_->setMinimumWidth( MinEditWidth );
             lineEdit_->setMaximumWidth( QWIDGETSIZE_MAX );
             historyButton_->show();
         }
         else {
-            if ( !patterns_.isEmpty() ) {
+            // Save expression to line edit, clear chips
+            if ( !chips_.isEmpty() ) {
                 lineEdit_->setText( combinePatterns() );
             }
+            else {
+                lineEdit_->clear();
+            }
             clearChips();
-            patterns_.clear();
+            chips_.clear();
+            notButton_->setChecked( false );
+            notButtonLit_ = false;
+            notButton_->hide();
             lineEdit_->setSizePolicy( QSizePolicy::Expanding, QSizePolicy::Fixed );
             lineEdit_->setMinimumWidth( 0 );
             lineEdit_->setMaximumWidth( QWIDGETSIZE_MAX );
@@ -272,6 +344,22 @@ void PatternInputWidget::setSearchCompleter( QCompleter* completer )
     lineEdit_->setCompleter( completer );
 }
 
+void PatternInputWidget::setNotButtonVisible( bool visible )
+{
+    notButton_->setVisible( visible );
+}
+
+bool PatternInputWidget::isNotButtonLit() const
+{
+    return notButtonLit_;
+}
+
+void PatternInputWidget::onNotButtonClicked()
+{
+    notButtonLit_ = notButton_->isChecked();
+    Q_EMIT notButtonToggled( notButtonLit_ );
+}
+
 void PatternInputWidget::showHistoryMenu()
 {
     if ( auto* completer = lineEdit_->completer() ) {
@@ -283,95 +371,410 @@ void PatternInputWidget::showHistoryMenu()
     }
 }
 
-QStringList PatternInputWidget::splitPattern( const QString& text ) const
+// ── Boolean Expression ↔ Chip Conversion ──
+
+bool PatternInputWidget::canParseToChips( const QString& booleanExpression )
 {
-    if ( text.isEmpty() ) {
-        return {};
+    if ( booleanExpression.isEmpty() ) {
+        return true;
     }
 
-    if ( isRegexMode_ ) {
-        return text.split( QLatin1Char( '|' ) );
+    // Extract quoted patterns and check operators
+    // Unsupported: xor, xnor, mixed AND-OR at same level without grouping,
+    // not() wrapping complex groups
+    static const QRegularExpression unsupportedOp(
+        QStringLiteral( R"(\b(xor|xnor)\b)" ),
+        QRegularExpression::CaseInsensitiveOption );
+
+    if ( unsupportedOp.match( booleanExpression ).hasMatch() ) {
+        return false;
     }
-    else {
-        return text.split( QStringLiteral( " or " ) );
+
+    // Check for mixed AND/OR at top level (ambiguous without explicit grouping)
+    // Simple heuristic: if we detect both " and " and " or " outside quotes,
+    // and no parentheses to disambiguate, it's unsupported
+    QString unquoted = booleanExpression;
+    // Remove quoted content for operator check
+    static const QRegularExpression quoted( QStringLiteral( R"re("[^"]*")re" ) );
+    unquoted.replace( quoted, QStringLiteral( "?" ) );
+
+    const bool hasAnd = unquoted.contains( QStringLiteral( " and " ), Qt::CaseInsensitive );
+    const bool hasOr = unquoted.contains( QStringLiteral( " or " ), Qt::CaseInsensitive );
+    const bool hasParen = unquoted.contains( QLatin1Char( '(' ) );
+
+    // Mixed AND/OR without parentheses is ambiguous
+    if ( hasAnd && hasOr && !hasParen ) {
+        return false;
     }
+
+    // not() wrapping a complex group (more than one operator inside)
+    static const QRegularExpression notWrapGroup(
+        QStringLiteral(
+            R"re(not\s*\(\s*"[^"]*"\s*(?:and|or)\s*"[^"]*"\s*(?:and|or)\s*)re" ),
+        QRegularExpression::CaseInsensitiveOption );
+    if ( notWrapGroup.match( booleanExpression ).hasMatch() ) {
+        return false;
+    }
+
+    return true;
 }
 
 void PatternInputWidget::parsePatterns( const QString& text )
 {
-    patterns_.clear();
-    const auto parts = splitPattern( text );
-    for ( const auto& part : parts ) {
-        if ( !part.isEmpty() ) {
-            patterns_.append( part );
+    chips_.clear();
+    if ( text.isEmpty() ) {
+        return;
+    }
+
+    if ( !canParseToChips( text ) ) {
+        // Fallback: store entire expression as a single pattern
+        chips_.append( Chip{ ChipType::Or, { text } } );
+        return;
+    }
+
+    if ( isRegexMode_ && !isBooleanMode_ ) {
+        // Regex-only mode: simple | split
+        const auto parts = text.split( QLatin1Char( '|' ) );
+        for ( const auto& part : parts ) {
+            const auto trimmed = part.trimmed();
+            if ( !trimmed.isEmpty() ) {
+                chips_.append( Chip{ ChipType::Or, { trimmed } } );
+            }
         }
+        return;
+    }
+
+    // Boolean expression parsing
+    // Extract all quoted patterns in order
+    static const QRegularExpression quotedPattern(
+        QStringLiteral( R"re("((?:[^"\\]|\\.)*)")re" ) );
+    QStringList quotedTerms;
+    auto it = quotedPattern.globalMatch( text );
+    while ( it.hasNext() ) {
+        auto match = it.next();
+        auto term = match.captured( 1 );
+        term.replace( QStringLiteral( "\\\"" ), QStringLiteral( "\"" ) );
+        quotedTerms.append( term );
+    }
+
+    if ( quotedTerms.isEmpty() ) {
+        // No quoted patterns — treat entire string as one chip
+        chips_.append( Chip{ ChipType::Or, { text } } );
+        return;
+    }
+
+    // Analyze structure between the quoted patterns
+    QString residual = text;
+    residual.replace( quotedPattern, QStringLiteral( "?" ) );
+
+    // Detect nand / nor for auto-conversion
+    const auto nandCount = residual.count( QStringLiteral( " nand " ), Qt::CaseInsensitive );
+    const auto norCount = residual.count( QStringLiteral( " nor " ), Qt::CaseInsensitive );
+
+    if ( nandCount > 0 ) {
+        // "A nand B" → not(A and B) → NotAndGroup
+        chips_.append( Chip{ ChipType::NotAndGroup, quotedTerms } );
+        return;
+    }
+
+    if ( norCount > 0 ) {
+        // "A nor B" → not(A or B) → two Not chips
+        for ( const auto& term : quotedTerms ) {
+            chips_.append( Chip{ ChipType::Not, { term } } );
+        }
+        return;
+    }
+
+    // ── Phase 1: Extract exclude terms from not("...") patterns ──
+    static const QRegularExpression notTermRe(
+        QStringLiteral( R"re(not\s*\(\s*"((?:[^"\\]|\\.)*)"\s*\))re" ),
+        QRegularExpression::CaseInsensitiveOption );
+
+    QStringList excludeTerms;
+    QString textWithoutNot = text;
+    auto notIt = notTermRe.globalMatch( text );
+    while ( notIt.hasNext() ) {
+        auto m = notIt.next();
+        auto term = m.captured( 1 );
+        term.replace( QStringLiteral( "\\\"" ), QStringLiteral( "\"" ) );
+        excludeTerms.append( term );
+        textWithoutNot.replace( m.captured(), QString() );
+    }
+
+    // Clean up trailing/leading " and " or " or " left after removing not() parts
+    static const QRegularExpression trailingAndOr(
+        QStringLiteral( R"re(^\s*(?:and|or)\s+|\s+(?:and|or)\s*$)re" ),
+        QRegularExpression::CaseInsensitiveOption );
+    textWithoutNot.replace( trailingAndOr, QString() );
+
+    // Check for NOT-and-group: not("A" and "B")
+    static const QRegularExpression notAndGroupRe(
+        QStringLiteral(
+            R"re(not\s*\(\s*"((?:[^"\\]|\\.)*)"\s+and\s+"((?:[^"\\]|\\.)*)"\s*\))re" ),
+        QRegularExpression::CaseInsensitiveOption );
+    auto nagMatch = notAndGroupRe.match( text );
+    if ( nagMatch.hasMatch() ) {
+        auto t1 = nagMatch.captured( 1 );
+        auto t2 = nagMatch.captured( 2 );
+        t1.replace( QStringLiteral( "\\\"" ), QStringLiteral( "\"" ) );
+        t2.replace( QStringLiteral( "\\\"" ), QStringLiteral( "\"" ) );
+        chips_.append( Chip{ ChipType::NotAndGroup, { t1, t2 } } );
+        textWithoutNot.replace( nagMatch.captured(), QString() );
+        // Remove these from excludeTerms if present
+        excludeTerms.removeAll( t1 );
+        excludeTerms.removeAll( t2 );
+    }
+
+    // Add simple Not chips for remaining exclude terms
+    for ( const auto& term : excludeTerms ) {
+        chips_.append( Chip{ ChipType::Not, { term } } );
+    }
+
+    // ── Phase 2: Parse include expression (text without not() parts) ──
+    // Extract remaining quoted terms from the include-only text
+    QStringList includeTerms;
+    auto it2 = quotedPattern.globalMatch( textWithoutNot );
+    while ( it2.hasNext() ) {
+        auto match = it2.next();
+        auto term = match.captured( 1 );
+        term.replace( QStringLiteral( "\\\"" ), QStringLiteral( "\"" ) );
+        includeTerms.append( term );
+    }
+
+    if ( includeTerms.isEmpty() ) {
+        return;
+    }
+
+    // Determine operator between include terms.
+    // Check for parenthesized AND-group: ("A" and "B") or "C"
+    static const QRegularExpression parenAndGroup(
+        QStringLiteral( R"re(\(\s*"((?:[^"\\]|\\.)*)"\s+and\s+"((?:[^"\\]|\\.)*)"\s*\))re" ),
+        QRegularExpression::CaseInsensitiveOption );
+    auto parenMatch = parenAndGroup.match( textWithoutNot );
+
+    QVector<Chip> includeChips;
+
+    if ( parenMatch.hasMatch() ) {
+        // Extract terms from the parenthesized AND-group
+        auto t1 = parenMatch.captured( 1 );
+        auto t2 = parenMatch.captured( 2 );
+        t1.replace( QStringLiteral( "\\\"" ), QStringLiteral( "\"" ) );
+        t2.replace( QStringLiteral( "\\\"" ), QStringLiteral( "\"" ) );
+        includeChips.append( Chip{ ChipType::AndGroup, { t1, t2 } } );
+
+        // Remove the AND-group part and find remaining top-level OR terms
+        QString remainingText = textWithoutNot;
+        remainingText.replace( parenMatch.captured(), QString() );
+        auto remIt = quotedPattern.globalMatch( remainingText );
+        while ( remIt.hasNext() ) {
+            auto match = remIt.next();
+            auto term = match.captured( 1 );
+            term.replace( QStringLiteral( "\\\"" ), QStringLiteral( "\"" ) );
+            if ( term != t1 && term != t2 ) {
+                includeChips.append( Chip{ ChipType::Or, { term } } );
+            }
+        }
+    }
+    else {
+        // No parenthesized AND-group — use top-level operator
+        QString residualInclude = textWithoutNot;
+        residualInclude.replace( quotedPattern, QStringLiteral( "?" ) );
+        const auto includeAndCount
+            = residualInclude.count( QStringLiteral( " and " ), Qt::CaseInsensitive );
+
+        if ( includeAndCount > 0 && includeTerms.size() >= 2 ) {
+            // Pure AND between include terms → AndGroup
+            includeChips.append( Chip{ ChipType::AndGroup, includeTerms } );
+        }
+        else {
+            // OR or single term → individual Or chips
+            for ( const auto& term : includeTerms ) {
+                includeChips.append( Chip{ ChipType::Or, { term } } );
+            }
+        }
+    }
+
+    // Prepend include chips before exclude chips
+    for ( int i = includeChips.size() - 1; i >= 0; --i ) {
+        chips_.insert( 0, includeChips.at( i ) );
     }
 }
 
 QString PatternInputWidget::combinePatterns() const
 {
-    if ( isRegexMode_ ) {
-        return patterns_.join( QLatin1Char( '|' ) );
+    if ( chips_.isEmpty() ) {
+        return {};
     }
-    else {
-        return patterns_.join( QStringLiteral( " or " ) );
+
+    if ( isRegexMode_ && !isBooleanMode_ ) {
+        QStringList terms;
+        for ( const auto& chip : chips_ ) {
+            for ( const auto& term : chip.terms ) {
+                terms.append( term );
+            }
+        }
+        return terms.join( QLatin1Char( '|' ) );
     }
+
+    // Separate include and exclude chips
+    QVector<Chip> includeChips;
+    QVector<Chip> excludeChips;
+    for ( const auto& chip : chips_ ) {
+        if ( chip.type == ChipType::Not || chip.type == ChipType::NotAndGroup ) {
+            excludeChips.append( chip );
+        }
+        else {
+            includeChips.append( chip );
+        }
+    }
+
+    QStringList parts;
+
+    // Include part
+    if ( !includeChips.isEmpty() ) {
+        QStringList includeParts;
+        for ( const auto& chip : includeChips ) {
+            if ( chip.type == ChipType::AndGroup && chip.terms.size() > 1 ) {
+                QStringList quoted;
+                for ( const auto& t : chip.terms ) {
+                    auto escaped = t;
+                    escaped.replace( QLatin1Char( '"' ), QStringLiteral( "\\\"" ) );
+                    quoted.append( QStringLiteral( "\"" ) + escaped + QStringLiteral( "\"" ) );
+                }
+                includeParts.append( QStringLiteral( "(" ) + quoted.join( QStringLiteral( " and " ) )
+                                     + QStringLiteral( ")" ) );
+            }
+            else {
+                auto escaped = chip.terms.value( 0 );
+                escaped.replace( QLatin1Char( '"' ), QStringLiteral( "\\\"" ) );
+                includeParts.append( QStringLiteral( "\"" ) + escaped + QStringLiteral( "\"" ) );
+            }
+        }
+
+        if ( includeParts.size() == 1 ) {
+            parts.append( includeParts.first() );
+        }
+        else {
+            parts.append( QStringLiteral( "(" ) + includeParts.join( QStringLiteral( " or " ) )
+                          + QStringLiteral( ")" ) );
+        }
+    }
+
+    // Exclude part
+    for ( const auto& chip : excludeChips ) {
+        if ( chip.type == ChipType::NotAndGroup && chip.terms.size() > 1 ) {
+            QStringList quoted;
+            for ( const auto& t : chip.terms ) {
+                auto escaped = t;
+                escaped.replace( QLatin1Char( '"' ), QStringLiteral( "\\\"" ) );
+                quoted.append( QStringLiteral( "\"" ) + escaped + QStringLiteral( "\"" ) );
+            }
+            parts.append( QStringLiteral( "not(" ) + quoted.join( QStringLiteral( " and " ) )
+                          + QStringLiteral( ")" ) );
+        }
+        else {
+            auto escaped = chip.terms.value( 0 );
+            escaped.replace( QLatin1Char( '"' ), QStringLiteral( "\\\"" ) );
+            parts.append( QStringLiteral( "not(\"" ) + escaped + QStringLiteral( "\")" ) );
+        }
+    }
+
+    if ( parts.isEmpty() ) {
+        return {};
+    }
+
+    auto result = parts.join( QStringLiteral( " and " ) );
+    return result;
 }
 
-QWidget* PatternInputWidget::createChipWidget( const QString& text, int index )
-{
-    QWidget* chip = new QWidget( chipsContainer_ );
-    chip->setProperty( "chipIndex", index );
-    chip->setProperty( "chipText", text );
-    chip->setSizePolicy( QSizePolicy::Fixed, QSizePolicy::Fixed );
-    chip->setFixedHeight( ChipHeight );
-    chip->setMouseTracking( true );
+// ── Chip Rendering ──
 
-    QHBoxLayout* layout = new QHBoxLayout( chip );
+QColor PatternInputWidget::chipBackgroundColor( const Chip& chip ) const
+{
+    const QColor highlight = palette().color( QPalette::Highlight );
+
+    switch ( chip.type ) {
+    case ChipType::Or:
+        return highlight;
+    case ChipType::AndGroup:
+        // Green hue shift from Highlight
+        return deriveColor( highlight, 120, -10, 10 );
+    case ChipType::Not:
+        // Red hue shift
+        return deriveColor( highlight, 180, 20, -5 );
+    case ChipType::NotAndGroup:
+        // Red hue shift with slight variation
+        return deriveColor( highlight, 180, 20, -5 );
+    }
+    return highlight;
+}
+
+QWidget* PatternInputWidget::createChipWidget( const Chip& chip, int index )
+{
+    QWidget* widget = new QWidget( chipsContainer_ );
+    widget->setProperty( "chipIndex", index );
+    widget->setProperty( "chipText", chipPropertyText( chip ) );
+    widget->setSizePolicy( QSizePolicy::Fixed, QSizePolicy::Fixed );
+    widget->setFixedHeight( ChipHeight );
+    widget->setMouseTracking( true );
+
+    QHBoxLayout* layout = new QHBoxLayout( widget );
     layout->setContentsMargins( ChipPadding, 2, ChipPadding, 2 );
     layout->setSpacing( 4 );
     layout->setSizeConstraint( QLayout::SetFixedSize );
 
-    QLabel* label = new QLabel( text, chip );
+    const QString displayText = chipDisplayText( chip );
+    QLabel* label = new QLabel( displayText, widget );
     label->setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Preferred );
     label->setStyleSheet( "QLabel { background: transparent; }" );
     label->setCursor( Qt::PointingHandCursor );
     label->installEventFilter( this );
     layout->addWidget( label );
 
-    QPushButton* removeButton = new QPushButton( chip );
+    QPushButton* removeButton = new QPushButton( widget );
     removeButton->setText( QStringLiteral( "x" ) );
     removeButton->setFont( QFont( "Arial", 10 ) );
     removeButton->setFixedSize( 16, 16 );
     removeButton->setSizePolicy( QSizePolicy::Fixed, QSizePolicy::Fixed );
     removeButton->setStyleSheet(
-        "QPushButton { border: none; background: transparent; padding: 0px; font-weight: bold; color: #888; }"
-        "QPushButton:hover { color: #d00; background: rgba(0,0,0,0.1); border-radius: 8px; }" );
+        "QPushButton { border: none; background: transparent; padding: 0px; font-weight: bold; "
+        "color: rgba(255,255,255,0.7); }"
+        "QPushButton:hover { color: rgba(255,255,255,1.0); background: rgba(0,0,0,0.2); "
+        "border-radius: 8px; }" );
     removeButton->setCursor( Qt::PointingHandCursor );
     removeButton->setProperty( "chipIndex", index );
     removeButton->hide();
     layout->addWidget( removeButton );
 
-    const QColor bgColor = palette().color( QPalette::Highlight );
-    const QColor fgColor = palette().color( QPalette::HighlightedText );
-    chip->setStyleSheet(
-        QString( "QWidget { background: %1; color: %2; border-radius: %3px; }" )
-            .arg( bgColor.name(), fgColor.name(), QString::number( ChipRadius ) ) );
+    const QColor bgColor = chipBackgroundColor( chip );
+    const QString fgColor = ( bgColor.lightness() > 128 ) ? QStringLiteral( "#1e1e1e" )
+                                                            : QStringLiteral( "#ffffff" );
+    QString style = QString( "QWidget { background: %1; color: %2; border-radius: %3px; }" )
+                        .arg( bgColor.name(), fgColor )
+                        .arg( ChipRadius );
 
-    connect( removeButton, &QPushButton::clicked, this, &PatternInputWidget::onChipRemoveClicked );
-    chip->installEventFilter( this );
+    // AND-group and NOT-AND-group get a subtle border
+    if ( chip.type == ChipType::AndGroup || chip.type == ChipType::NotAndGroup ) {
+        style += QString( " QWidget { border: 1px solid %1; }" )
+                     .arg( bgColor.lighter( 140 ).name() );
+    }
 
-    return chip;
+    widget->setStyleSheet( style );
+
+    connect( removeButton, &QPushButton::clicked, this,
+             &PatternInputWidget::onChipRemoveClicked );
+    widget->installEventFilter( this );
+
+    return widget;
 }
 
 void PatternInputWidget::updateChips()
 {
     clearChips();
 
-    for ( int i = 0; i < patterns_.size(); ++i ) {
-        const QString& pattern = patterns_.at( i );
-        if ( !pattern.isEmpty() ) {
-            QWidget* chip = createChipWidget( pattern, i );
+    for ( int i = 0; i < chips_.size(); ++i ) {
+        if ( !chips_[ i ].terms.isEmpty() ) {
+            QWidget* chip = createChipWidget( chips_[ i ], i );
             chipsLayout_->insertWidget( i, chip );
         }
     }
@@ -379,27 +782,95 @@ void PatternInputWidget::updateChips()
     chipsContainer_->adjustSize();
 }
 
-void PatternInputWidget::addChip( const QString& pattern )
+void PatternInputWidget::addChipFromText( const QString& pattern )
 {
-    const auto parts = splitPattern( pattern );
-    bool changed = false;
-    for ( const auto& part : parts ) {
-        if ( !part.isEmpty() && !patterns_.contains( part ) ) {
-            patterns_.append( part );
-            changed = true;
+    if ( pattern.isEmpty() ) {
+        return;
+    }
+
+    // Determine chip type based on NOT button state
+    ChipType type = notButtonLit_ ? ChipType::Not : ChipType::Or;
+
+    // Check for & in the text → AND-group
+    if ( pattern.contains( QLatin1Char( '&' ) ) ) {
+        const auto parts = pattern.split( QLatin1Char( '&' ) );
+        QStringList terms;
+        for ( const auto& part : parts ) {
+            const auto trimmed = part.trimmed();
+            if ( !trimmed.isEmpty() ) {
+                terms.append( trimmed );
+            }
+        }
+        if ( terms.size() > 1 ) {
+            type = notButtonLit_ ? ChipType::NotAndGroup : ChipType::AndGroup;
         }
     }
-    if ( changed ) {
-        updateChips();
-        scrollToEnd();
-        Q_EMIT chipChanged( text() );
+
+    // Check for regex-mode | split
+    if ( isRegexMode_ ) {
+        const auto parts = pattern.split( QLatin1Char( '|' ) );
+        bool changed = false;
+        for ( const auto& part : parts ) {
+            const auto trimmed = part.trimmed();
+            if ( trimmed.isEmpty() ) {
+                continue;
+            }
+            Chip chip{ type, { trimmed } };
+            if ( !chips_.contains( chip ) ) {
+                chips_.append( chip );
+                changed = true;
+            }
+        }
+        if ( changed ) {
+            updateChips();
+            scrollToEnd();
+            Q_EMIT chipChanged( text() );
+        }
+    }
+    else {
+        // Simple add with dedup
+        const QStringList terms = type == ChipType::AndGroup || type == ChipType::NotAndGroup
+                                      ? pattern.split( QLatin1Char( '&' ) )
+                                      : QStringList{ pattern };
+        QStringList cleaned;
+        for ( const auto& t : terms ) {
+            const auto trimmed = t.trimmed();
+            if ( !trimmed.isEmpty() ) {
+                cleaned.append( trimmed );
+            }
+        }
+        if ( cleaned.isEmpty() ) {
+            return;
+        }
+
+        Chip chip{ type, cleaned };
+        // Dedup
+        bool exists = false;
+        for ( const auto& existing : std::as_const( chips_ ) ) {
+            if ( existing.type == chip.type && existing.terms == chip.terms ) {
+                exists = true;
+                break;
+            }
+        }
+        if ( !exists ) {
+            chips_.append( chip );
+            updateChips();
+            scrollToEnd();
+            Q_EMIT chipChanged( text() );
+        }
+    }
+
+    // Reset NOT button after adding chip
+    if ( notButtonLit_ ) {
+        notButton_->setChecked( false );
+        notButtonLit_ = false;
     }
 }
 
 void PatternInputWidget::removeChip( int index )
 {
-    if ( index >= 0 && index < patterns_.size() ) {
-        patterns_.removeAt( index );
+    if ( index >= 0 && index < chips_.size() ) {
+        chips_.removeAt( index );
         updateChips();
         Q_EMIT chipChanged( text() );
     }
@@ -425,12 +896,13 @@ void PatternInputWidget::onChipRemoveClicked()
         return;
     }
 
-    if ( !chip->property( "chipText" ).isValid() ) {
+    if ( !chip->property( "chipIndex" ).isValid() ) {
         return;
     }
 
-    QString chipText = chip->property( "chipText" ).toString();
-    if ( chipText.isEmpty() ) {
+    bool ok;
+    int index = chip->property( "chipIndex" ).toInt( &ok );
+    if ( !ok ) {
         return;
     }
 
@@ -439,13 +911,12 @@ void PatternInputWidget::onChipRemoveClicked()
         finishChipEdit( editingChipEdit_, false );
     }
 
-    QTimer::singleShot( 0, this, [ this, chipText ]() {
+    QTimer::singleShot( 0, this, [ this, index ]() {
         if ( !isChipMode_ ) {
             return;
         }
-        const qsizetype index = patterns_.indexOf( chipText );
-        if ( index >= 0 ) {
-            removeChip( static_cast<int>( index ) );
+        if ( index >= 0 && index < chips_.size() ) {
+            removeChip( index );
         }
     } );
 }
@@ -455,7 +926,7 @@ void PatternInputWidget::onLineEditReturnPressed()
     const QString text = lineEdit_->text().trimmed();
 
     if ( isChipMode_ && !text.isEmpty() ) {
-        addChip( text );
+        addChipFromText( text );
         lineEdit_->clear();
     }
     Q_EMIT returnPressed();
@@ -468,6 +939,8 @@ void PatternInputWidget::onLineEditTextChanged( const QString& text )
         Q_EMIT textChanged( lineEdit_->text() );
     }
 }
+
+// ── Event Filter ──
 
 bool PatternInputWidget::eventFilter( QObject* obj, QEvent* event )
 {
@@ -522,6 +995,8 @@ bool PatternInputWidget::eventFilter( QObject* obj, QEvent* event )
     return QWidget::eventFilter( obj, event );
 }
 
+// ── Inline Chip Editing ──
+
 void PatternInputWidget::startChipEdit( QLabel* label )
 {
     if ( isReadOnly_ ) {
@@ -535,7 +1010,7 @@ void PatternInputWidget::startChipEdit( QLabel* label )
 
     bool ok;
     int chipIndex = chip->property( "chipIndex" ).toInt( &ok );
-    if ( !ok || chipIndex < 0 || chipIndex >= patterns_.size() ) {
+    if ( !ok || chipIndex < 0 || chipIndex >= chips_.size() ) {
         return;
     }
 
@@ -550,16 +1025,18 @@ void PatternInputWidget::startChipEdit( QLabel* label )
     label->removeEventFilter( this );
     label->deleteLater();
 
-    const QColor bgColor = palette().color( QPalette::Highlight );
-    const QColor fgColor = palette().color( QPalette::HighlightedText );
+    const QColor bgColor = chipBackgroundColor( chips_.at( chipIndex ) );
     QLineEdit* edit = new QLineEdit( originalText, chip );
     edit->setProperty( "chipIndex", chipIndex );
     edit->setProperty( "originalText", originalText );
     edit->setSizePolicy( QSizePolicy::Preferred, QSizePolicy::Fixed );
     edit->setFixedHeight( ChipHeight );
     edit->setStyleSheet(
-        QString( "QLineEdit { border: 1px solid %1; border-radius: 4px; background: %2; color: %3; padding-left: 2px; }" )
-            .arg( bgColor.darker( 130 ).name(), bgColor.name(), fgColor.name() ) );
+        QString( "QLineEdit { border: 1px solid %1; border-radius: 4px; background: %2; "
+                 "color: %3; padding-left: 2px; }" )
+            .arg( bgColor.darker( 130 ).name(), bgColor.name(),
+                  ( bgColor.lightness() > 128 ) ? QStringLiteral( "#1e1e1e" )
+                                                 : QStringLiteral( "#ffffff" ) ) );
     edit->selectAll();
     edit->installEventFilter( this );
 
@@ -631,24 +1108,33 @@ void PatternInputWidget::finishChipEdit( QLineEdit* edit, bool accept )
     label->installEventFilter( this );
     layout->insertWidget( editIndex, label );
 
-    if ( accept && newText != originalText ) {
-        if ( chipIndex >= 0 && chipIndex < patterns_.size() ) {
-            if ( !newText.isEmpty() ) {
-                const auto parts = splitPattern( newText );
-                patterns_.removeAt( chipIndex );
-                int insertPos = chipIndex;
-                for ( const auto& part : parts ) {
-                    if ( !part.isEmpty() && !patterns_.contains( part ) ) {
-                        patterns_.insert( insertPos, part );
-                        ++insertPos;
-                    }
-                }
-                updateChips();
-                Q_EMIT chipChanged( text() );
+    if ( accept && newText != originalText && chipIndex >= 0 && chipIndex < chips_.size() ) {
+        if ( !newText.isEmpty() ) {
+            auto& existingChip = chips_[ chipIndex ];
+            // For simple Or/Not chips, update the term
+            if ( existingChip.type == ChipType::Or || existingChip.type == ChipType::Not ) {
+                existingChip.terms = QStringList{ newText };
             }
             else {
-                removeChip( chipIndex );
+                // For AndGroup/NotAndGroup, split by &
+                const auto parts = newText.split( QLatin1Char( '&' ) );
+                QStringList terms;
+                for ( const auto& part : parts ) {
+                    const auto trimmed = part.trimmed();
+                    if ( !trimmed.isEmpty() ) {
+                        terms.append( trimmed );
+                    }
+                }
+                if ( !terms.isEmpty() ) {
+                    existingChip.terms = terms;
+                }
             }
+            chip->setProperty( "chipText", chipPropertyText( existingChip ) );
+            updateChips();
+            Q_EMIT chipChanged( text() );
+        }
+        else {
+            removeChip( chipIndex );
         }
     }
 }

@@ -29,7 +29,26 @@
 #include <QToolButton>
 #include <QWidget>
 
+#include <QVector>
+
 class QCompleter;
+
+enum class ChipType {
+    Or,          // Single term, OR-connected to siblings
+    AndGroup,    // Multiple terms AND-connected within this chip
+    Not,         // Single excluded term
+    NotAndGroup, // Multiple terms AND-connected, excluded as a group
+};
+
+struct Chip {
+    ChipType type = ChipType::Or;
+    QStringList terms;
+
+    bool operator==( const Chip& other ) const
+    {
+        return type == other.type && terms == other.terms;
+    }
+};
 
 class PatternInputWidget : public QWidget {
     Q_OBJECT
@@ -43,8 +62,9 @@ class PatternInputWidget : public QWidget {
 
     QString text() const;
     void setText( const QString& text );
-    void setPatterns( const QStringList& patterns );
-    QStringList patterns() const;
+
+    void setChips( const QVector<Chip>& chips );
+    QVector<Chip> chips() const;
 
     void setPlaceholderText( const QString& placeholder );
     QString placeholderText() const;
@@ -53,6 +73,9 @@ class PatternInputWidget : public QWidget {
 
     void setRegexMode( bool isRegex );
     bool isRegexMode() const;
+
+    void setBooleanMode( bool isBoolean );
+    bool isBooleanMode() const;
 
     void setReadOnly( bool readOnly );
     bool isReadOnly() const;
@@ -64,11 +87,17 @@ class PatternInputWidget : public QWidget {
 
     void setSearchCompleter( QCompleter* completer );
 
+    void setNotButtonVisible( bool visible );
+    bool isNotButtonLit() const;
+
+    static bool canParseToChips( const QString& booleanExpression );
+
   Q_SIGNALS:
     void textChanged( const QString& text );
     void chipChanged( const QString& text );
     void returnPressed();
     void contextMenuRequested( const QPoint& globalPos );
+    void notButtonToggled( bool lit );
 
   public Q_SLOTS:
     void onChipRemoveClicked();
@@ -76,18 +105,20 @@ class PatternInputWidget : public QWidget {
   private Q_SLOTS:
     void onLineEditReturnPressed();
     void onLineEditTextChanged( const QString& text );
+    void onNotButtonClicked();
 
   private:
-    QStringList splitPattern( const QString& text ) const;
     void parsePatterns( const QString& text );
     QString combinePatterns() const;
 
-    QWidget* createChipWidget( const QString& text, int index );
+    QWidget* createChipWidget( const Chip& chip, int index );
     void clearChips();
     void updateChips();
-    void addChip( const QString& pattern );
+    void addChipFromText( const QString& pattern );
     void removeChip( int index );
     void scrollToEnd();
+
+    QColor chipBackgroundColor( const Chip& chip ) const;
 
     void startChipEdit( QLabel* label );
     void finishChipEdit( QLineEdit* edit, bool accept );
@@ -101,12 +132,15 @@ class PatternInputWidget : public QWidget {
     QHBoxLayout* chipsLayout_ = nullptr;
     QLineEdit* lineEdit_ = nullptr;
     QToolButton* historyButton_ = nullptr;
+    QToolButton* notButton_ = nullptr;
     QLineEdit* editingChipEdit_ = nullptr;
 
-    QStringList patterns_;
+    QVector<Chip> chips_;
     bool isRegexMode_ = false;
+    bool isBooleanMode_ = false;
     bool isChipMode_ = false;
     bool isReadOnly_ = false;
+    bool notButtonLit_ = false;
 };
 
 #endif

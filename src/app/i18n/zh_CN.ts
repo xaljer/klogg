@@ -2423,4 +2423,22 @@
         <translation>Klogg 日志阅读器</translation>
     </message>
 </context>
+<context>
+    <name>PatternInputWidget</name>
+    <message>
+        <location filename="../../ui/src/patterninputwidget.cpp" line="120"/>
+        <source>NOT</source>
+        <translation>非</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/patterninputwidget.cpp" line="122"/>
+        <source>Toggle to add exclude pattern</source>
+        <translation>切换为添加排除条件</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/patterninputwidget.cpp" line="166"/>
+        <source>Search history</source>
+        <translation>搜索历史</translation>
+    </message>
+</context>
 </TS>

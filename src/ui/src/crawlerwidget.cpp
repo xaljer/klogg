@@ -1902,8 +1902,26 @@ void CrawlerWidget::replaceCurrentSearch( const QString& searchText )
             // Accept auto-refresh of the search
             searchState_.startSearch();
             searchInfoLine_->hide();
-            logMainView_->setSearchPattern( regexpPattern );
-            filteredView_->setSearchPattern( regexpPattern );
+
+            // For boolean expressions, highlight only the include terms.
+            // AbstractLogView skips match highlighting when isBoolean=true.
+            if ( shouldUseBooleanCombining && patternInputWidget_->isChipMode() ) {
+                const auto highlightExpr = patternInputWidget_->includeRegex();
+                if ( !highlightExpr.isEmpty() ) {
+                    auto highlightPattern = RegularExpressionPattern(
+                        highlightExpr, matchCaseButton_->isChecked(), false, false, false );
+                    logMainView_->setSearchPattern( highlightPattern );
+                    filteredView_->setSearchPattern( highlightPattern );
+                }
+                else {
+                    logMainView_->setSearchPattern( regexpPattern );
+                    filteredView_->setSearchPattern( regexpPattern );
+                }
+            }
+            else {
+                logMainView_->setSearchPattern( regexpPattern );
+                filteredView_->setSearchPattern( regexpPattern );
+            }
         }
         else {
             // The regexp is wrong

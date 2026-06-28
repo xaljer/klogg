@@ -33,8 +33,6 @@
 #include <QPushButton>
 #include <QRegularExpression>
 
-#include "log.h"
-
 namespace {
 
 const int ChipRadius = 12;
@@ -296,6 +294,22 @@ void PatternInputWidget::clearChips()
         chipWidget->removeEventFilter( this );
         chipWidget->deleteLater();
     }
+}
+
+QString PatternInputWidget::includeRegex() const
+{
+    QStringList terms;
+    for ( const auto& chip : chips_ ) {
+        if ( chip.type == ChipType::Not || chip.type == ChipType::NotAndGroup ) {
+            continue;
+        }
+        for ( const auto& term : chip.terms ) {
+            if ( !term.isEmpty() ) {
+                terms.append( term );
+            }
+        }
+    }
+    return terms.join( QLatin1Char( '|' ) );
 }
 
 void PatternInputWidget::setChipMode( bool chipMode )

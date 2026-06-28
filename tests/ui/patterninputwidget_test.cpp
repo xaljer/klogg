@@ -629,7 +629,9 @@ SCENARIO( "PatternInputWidget mode switching", "[ui]" )
 
         WHEN( "switching to chip mode" )
         {
+            const auto savedText = widget.text();
             widget.setChipMode( true );
+            widget.setText( savedText );
             QTest::qWait( 50 );
 
             THEN( "text is parsed as single chip" )
@@ -710,7 +712,9 @@ SCENARIO( "PatternInputWidget round-trip: chip mode off → on → off", "[ui]" 
                  == "(\"thread\" or \"xxx\" or \"processing\") and not(\"started\")" );
 
         // Step 3: Turn chip mode back on
+        const auto savedExpression = widget.text();
         widget.setChipMode( true );
+        widget.setText( savedExpression );
         QTest::qWait( 50 );
         REQUIRE( widget.isChipMode() );
 
@@ -1041,6 +1045,7 @@ SCENARIO( "PatternInputWidget simulate exclude-from-search flow", "[ui]" )
         PatternInputWidget widget;
         widget.setChipMode( true );
         widget.setRegexMode( true );
+        widget.setBooleanMode( true );
         widget.setChips( { Chip{ ChipType::Or, { "error" } },
                            Chip{ ChipType::Not, { "timeout" } } } );
         QTest::qWait( 50 );

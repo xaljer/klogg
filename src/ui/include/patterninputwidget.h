@@ -66,6 +66,8 @@ class PatternInputWidget : public QWidget {
     void setChips( const QVector<Chip>& chips );
     QVector<Chip> chips() const;
 
+    QString includeRegex() const;
+
     void setPlaceholderText( const QString& placeholder );
     QString placeholderText() const;
 

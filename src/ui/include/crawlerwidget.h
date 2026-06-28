@@ -114,6 +114,12 @@ class CrawlerWidget : public QSplitter,
 
     bool isChipMode() const;
 
+    QString getCurrentSearchText() const;
+
+    void scrollToLine( LineNumber line );
+
+    void setSearchText( const QString& text );
+
     void registerShortcuts();
 
   public Q_SLOTS:
@@ -349,7 +355,6 @@ class CrawlerWidget : public QSplitter,
     QString escapeSearchPattern( const QString& searchPattern, bool isRegex = false ) const;
     QString& combinePatterns( QString& currentPattern, const QString& newPattern ) const;
     void setSearchPattern( const QString& searchPattern );
-    QString getCurrentSearchText() const;
 
     void resetStateOnSearchPatternChanges();
 

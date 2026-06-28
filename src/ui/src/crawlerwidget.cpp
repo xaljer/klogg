@@ -329,6 +329,18 @@ void CrawlerWidget::jumpToTop()
     filteredView_->selectAndDisplayLine( 0_lnum );
 }
 
+void CrawlerWidget::scrollToLine( LineNumber line )
+{
+    logMainView_->selectAndDisplayLine( line );
+    filteredView_->selectAndDisplayLine( 0_lnum );
+}
+
+void CrawlerWidget::setSearchText( const QString& text )
+{
+    searchLineEdit_->setEditText( text );
+    patternInputWidget_->setText( text );
+}
+
 //
 // Protected functions
 //

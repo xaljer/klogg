@@ -2001,6 +2001,11 @@
         <translation>Close all</translation>
     </message>
     <message>
+        <location filename="../../ui/src/tabbedcrawlerwidget.cpp" line="201"/>
+        <source>Open in new window</source>
+        <translation>Open in new window</translation>
+    </message>
+    <message>
         <location filename="../../ui/src/tabbedcrawlerwidget.cpp" line="186"/>
         <source>Copy full path</source>
         <translation>Copy full path</translation>
@@ -2032,6 +2037,16 @@
         <location filename="../../ui/src/mainwindowtext.cpp" line="30"/>
         <source>Create new klogg window</source>
         <translation>Create new klogg window</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="31"/>
+        <source>Open in new window</source>
+        <translation>Open in new window</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="32"/>
+        <source>Open current file in a new klogg window</source>
+        <translation>Open current file in a new klogg window</translation>
     </message>
     <message>
         <location filename="../../ui/src/mainwindowtext.cpp" line="31"/>

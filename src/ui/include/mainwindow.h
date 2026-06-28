@@ -94,6 +94,9 @@ class MainWindow : public QMainWindow {
     // (for use from e.g. IPC)
     void loadFileNonInteractive( const QString& file_name );
 
+    void loadFileFromAnotherWindow( const QString& fileName, uint64_t topLine,
+                                    const QString& viewContext, const QString& searchText );
+
   protected:
     void closeEvent( QCloseEvent* event ) override;
     void changeEvent( QEvent* event ) override;
@@ -191,6 +194,8 @@ class MainWindow : public QMainWindow {
     void exitingQuickFind();
 
     void newWindow();
+    void openFileInNewWindow( const QString& fileName, uint64_t topLine,
+                              const QString& viewContext, const QString& searchText );
     void windowActivated();
     void windowClosed();
     void exitRequested();
@@ -204,7 +209,9 @@ class MainWindow : public QMainWindow {
     void readSettings();
     void writeSettings();
     bool loadFile( const QString& fileName, bool followFile = false );
+    bool loadFileInternal( const QString& fileName, const QString& viewContext = {} );
     bool extractAndLoadFile( const QString& fileName );
+    void openCurrentFileInNewWindow();
     void openRemoteFile( const QUrl& url );
     void updateTitleBar( const QString& fileName );
     void addRecentFile( const QString& fileName );
@@ -257,6 +264,7 @@ class MainWindow : public QMainWindow {
     QToolBar* toolBar;
 
     QAction* newWindowAction;
+    QAction* openInNewWindowAction;
     QAction* openAction;
     QAction* closeAction;
     QAction* closeAllAction;
@@ -342,6 +350,10 @@ class MainWindow : public QMainWindow {
     bool isCloseFromTray_ = false;
 
     std::once_flag screenChangesConnect_;
+
+    // Pending state for open-in-new-window restore
+    uint64_t pendingTopLine_ = 0;
+    QString pendingSearchText_;
 };
 
 #endif

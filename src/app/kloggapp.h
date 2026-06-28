@@ -244,6 +244,13 @@ class KloggApp : public QApplication {
 
         LOG_INFO << "Window " << &window << " created";
         connect( window, &MainWindow::newWindow, [ = ]() { newWindow()->show(); } );
+        connect( window, &MainWindow::openFileInNewWindow,
+                 [ this ]( const QString& fileName, uint64_t topLine, const QString& viewContext,
+                           const QString& searchText ) {
+                     auto* newWin = newWindow();
+                     newWin->show();
+                     newWin->loadFileFromAnotherWindow( fileName, topLine, viewContext, searchText );
+                 } );
         connect( window, &MainWindow::windowActivated,
                  [ this, window ]() { onWindowActivated( *window ); } );
         connect( window, &MainWindow::windowClosed,

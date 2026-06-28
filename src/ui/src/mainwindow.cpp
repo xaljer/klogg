@@ -198,6 +198,8 @@ MainWindow::MainWindow( WindowSession session )
 
     connect( &mainTabWidget_, &TabbedCrawlerWidget::tabCloseRequested, this,
              [ this ]( int index ) { this->closeTab( index, ActionInitiator::User ); } );
+    connect( &mainTabWidget_, &TabbedCrawlerWidget::openInNewWindowRequested, this,
+             [ this ]( int /*tab*/ ) { openCurrentFileInNewWindow(); } );
     connect( &mainTabWidget_, &TabbedCrawlerWidget::currentChanged, this,
              &MainWindow::currentTabChanged );
 
@@ -337,6 +339,9 @@ void MainWindow::reTranslateUI()
     };
     newWindowAction->setText( transAction( action::newWindowText ) );
     newWindowAction->setStatusTip( transAction( action::newWindowStatusTip ) );
+
+    openInNewWindowAction->setText( transAction( action::openInNewWindowText ) );
+    openInNewWindowAction->setStatusTip( transAction( action::openInNewWindowStatusTip ) );
 
     openAction->setText( transAction( action::openText ) );
     openAction->setStatusTip( transAction( action::openStatusTip ) );
@@ -487,6 +492,11 @@ void MainWindow::createActions()
     newWindowAction->setStatusTip( tr( action::newWindowStatusTip ) );
     connect( newWindowAction, &QAction::triggered, [ = ] { Q_EMIT newWindow(); } );
     newWindowAction->setVisible( config.allowMultipleWindows() );
+
+    openInNewWindowAction = new QAction( tr( action::openInNewWindowText ), this );
+    openInNewWindowAction->setStatusTip( tr( action::openInNewWindowStatusTip ) );
+    connect( openInNewWindowAction, &QAction::triggered,
+             [ this ] { openCurrentFileInNewWindow(); } );
 
     openAction = new QAction( tr( action::openText ), this );
     openAction->setStatusTip( tr( action::openStatusTip ) );
@@ -854,6 +864,7 @@ void MainWindow::createMenus()
     fileMenu = menuBar()->addMenu( tr( menu::fileTitle ) );
     fileMenu->setToolTipsVisible( true );
     fileMenu->addAction( newWindowAction );
+    fileMenu->addAction( openInNewWindowAction );
     fileMenu->addAction( openAction );
     fileMenu->addAction( openClipboardAction );
     fileMenu->addAction( openUrlAction );
@@ -1558,6 +1569,15 @@ void MainWindow::handleLoadingFinished( LoadingStatus status )
 
         // Now everything is ready, we can finally show the file!
         currentCrawlerWidget()->show();
+
+        if ( pendingTopLine_ > 0 ) {
+            currentCrawlerWidget()->scrollToLine( LineNumber( pendingTopLine_ ) );
+            pendingTopLine_ = 0;
+        }
+        if ( !pendingSearchText_.isEmpty() ) {
+            currentCrawlerWidget()->setSearchText( pendingSearchText_ );
+            pendingSearchText_.clear();
+        }
     }
     else {
         if ( status == LoadingStatus::NoMemory ) {
@@ -1657,6 +1677,20 @@ void MainWindow::changeQFPattern( const QString& newPattern )
     quickFindWidget_.changeDisplayedPattern( newPattern, true );
 }
 
+void MainWindow::loadFileFromAnotherWindow( const QString& fileName, uint64_t topLine,
+                                          const QString& viewContext, const QString& searchText )
+{
+    LOG_DEBUG << "loadFileFromAnotherWindow( " << fileName.toStdString() << " )";
+
+    pendingTopLine_ = topLine;
+    pendingSearchText_ = searchText;
+
+    if ( !loadFileInternal( fileName, viewContext ) ) {
+        pendingTopLine_ = 0;
+        pendingSearchText_.clear();
+    }
+}
+
 void MainWindow::loadFileNonInteractive( const QString& file_name )
 {
     LOG_DEBUG << "loadFileNonInteractive( " << file_name.toStdString() << " )";
@@ -1696,6 +1730,25 @@ void MainWindow::loadFileNonInteractive( const QString& file_name )
     if ( auto currentCrawler = currentCrawlerWidget() ) {
         currentCrawler->setFocus();
     }
+}
+
+void MainWindow::openCurrentFileInNewWindow()
+{
+    auto* crawler = currentCrawlerWidget();
+    if ( !crawler ) {
+        return;
+    }
+
+    const auto fileName = session_.getFilename( crawler );
+    if ( fileName.isEmpty() ) {
+        return;
+    }
+
+    const auto topLine = crawler->getTopLine().get();
+    const auto viewContext = crawler->context()->toString();
+    const auto searchText = crawler->getCurrentSearchText();
+
+    Q_EMIT openFileInNewWindow( fileName, topLine, viewContext, searchText );
 }
 
 //
@@ -1902,74 +1955,72 @@ bool MainWindow::loadFile( const QString& fileName, bool followFile )
 
     if ( decompressAction == DecompressAction::None || !Configuration::get().extractArchives() ) {
         // Load the file
-        loadingFileName = fileName;
-
-        try {
-            const auto previousViewContext = [ &fileName ]() {
-                const auto& session = SessionInfo::getSynced();
-                const auto& windows = session.windows();
-                for ( const auto& windowId : windows ) {
-                    const auto openedFiles = session.openFiles( windowId );
-                    const auto existingContext
-                        = std::find_if( openedFiles.begin(), openedFiles.end(),
-                                        [ &fileName ]( const auto& context ) {
-                                            return context.fileName == fileName;
-                                        } );
-                    if ( existingContext != openedFiles.end() ) {
-                        return existingContext->viewContext;
-                    }
+        const auto previousViewContext = [ &fileName ]() {
+            const auto& session = SessionInfo::getSynced();
+            const auto& windows = session.windows();
+            for ( const auto& windowId : windows ) {
+                const auto openedFiles = session.openFiles( windowId );
+                const auto existingContext
+                    = std::find_if( openedFiles.begin(), openedFiles.end(),
+                                    [ &fileName ]( const auto& context ) {
+                                        return context.fileName == fileName;
+                                    } );
+                if ( existingContext != openedFiles.end() ) {
+                    return existingContext->viewContext;
                 }
-                return QString{};
-            }();
-
-            CrawlerWidget* crawler_widget = static_cast<CrawlerWidget*>(
-                session_.open( fileName, []() { return new CrawlerWidget(); } ) );
-
-            if ( !crawler_widget ) {
-                LOG_ERROR << "Can't create crawler for " << fileName.toStdString();
-                return false;
             }
+            return QString{};
+        }();
 
-            // We won't show the widget until the file is fully loaded
-            crawler_widget->hide();
-
-            if ( !previousViewContext.isEmpty() ) {
-                LOG_INFO << "Found existing context";
-                crawler_widget->setViewContext( previousViewContext );
-            }
-
-            // We disable the tab widget to avoid having someone switch
-            // tab during loading. (maybe FIXME)
-            // mainTabWidget_.setEnabled( false );
-
-            int index = mainTabWidget_.addCrawler( crawler_widget, fileName );
-
-            // Apply global chip mode to new crawler
-            crawler_widget->setChipMode( globalChipMode_ );
-
-            // Setting the new tab, the user will see a blank page for the duration
-            // of the loading, with no way to switch to another tab
-            mainTabWidget_.setCurrentIndex( index );
-
-            addRecentFile( fileName );
-            updateOpenedFilesMenu();
-
+        if ( loadFileInternal( fileName, previousViewContext ) ) {
             const auto& config = Configuration::get();
             if ( config.anyFileWatchEnabled() && ( followFile || config.followFileOnLoad() ) ) {
-                signalCrawlerToFollowFile( crawler_widget );
-                followAction->setChecked( true );
+                auto* crawler = currentCrawlerWidget();
+                if ( crawler ) {
+                    signalCrawlerToFollowFile( crawler );
+                    followAction->setChecked( true );
+                }
             }
-        } catch ( ... ) {
-            LOG_ERROR << "Can't open file " << fileName.toStdString();
+            return true;
+        }
+        return false;
+    }
+
+    return extractAndLoadFile( fileName );
+}
+
+bool MainWindow::loadFileInternal( const QString& fileName, const QString& viewContext )
+{
+    loadingFileName = fileName;
+
+    try {
+        CrawlerWidget* crawler_widget = static_cast<CrawlerWidget*>(
+            session_.openAlways( fileName, []() { return new CrawlerWidget(); }, viewContext ) );
+
+        if ( !crawler_widget ) {
+            LOG_ERROR << "Can't create crawler for " << fileName.toStdString();
             return false;
         }
 
-        LOG_DEBUG << "Success loading file " << fileName.toStdString();
-        return true;
+        // We won't show the widget until the file is fully loaded
+        crawler_widget->hide();
+
+        int index = mainTabWidget_.addCrawler( crawler_widget, fileName );
+
+        // Apply global chip mode to new crawler
+        crawler_widget->setChipMode( globalChipMode_ );
+
+        mainTabWidget_.setCurrentIndex( index );
+
+        addRecentFile( fileName );
+        updateOpenedFilesMenu();
+    } catch ( ... ) {
+        LOG_ERROR << "Can't open file " << fileName.toStdString();
+        return false;
     }
-    else {
-        return extractAndLoadFile( fileName );
-    }
+
+    LOG_DEBUG << "Success loading file " << fileName.toStdString();
+    return true;
 }
 
 // Strips the passed filename from its directory part.

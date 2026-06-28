@@ -198,6 +198,8 @@ void TabbedCrawlerWidget::showContextMenu( int tab, QPoint globalPoint )
     auto closeRight = menu.addAction( tr( "Close to the right" ) );
     auto closeAll = menu.addAction( tr( "Close all" ) );
     menu.addSeparator();
+    auto openInNewWindow = menu.addAction( tr( "Open in new window" ) );
+    menu.addSeparator();
     auto copyFullPath = menu.addAction( tr( "Copy full path" ) );
     auto openContainingFolder = menu.addAction( tr( "Open containing folder" ) );
     menu.addSeparator();
@@ -234,6 +236,9 @@ void TabbedCrawlerWidget::showContextMenu( int tab, QPoint globalPoint )
             Q_EMIT tabCloseRequested( 0 );
         }
     } );
+
+    connect( openInNewWindow, &QAction::triggered,
+             [ tab, this ] { Q_EMIT openInNewWindowRequested( tab ); } );
 
     if ( tab == 0 ) {
         closeLeft->setDisabled( true );

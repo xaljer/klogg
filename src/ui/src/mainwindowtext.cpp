@@ -28,6 +28,8 @@ const char* trayicon::trayiconTip = QT_TR_NOOP( "klogg log viewer" );
 // action
 const char* action::newWindowText = QT_TR_NOOP( "&New window" );
 const char* action::newWindowStatusTip = QT_TR_NOOP( "Create new klogg window" );
+const char* action::openInNewWindowText = QT_TR_NOOP( "Open in new window" );
+const char* action::openInNewWindowStatusTip = QT_TR_NOOP( "Open current file in a new klogg window" );
 const char* action::openText = QT_TR_NOOP( "&Open..." );
 const char* action::openStatusTip = QT_TR_NOOP( "Open a file" );
 const char* action::recentFilesCleanupText = QT_TR_NOOP("Clear List");

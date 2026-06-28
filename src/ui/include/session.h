@@ -158,6 +158,14 @@ class WindowSession {
         return appSession_->open( file_name, view_factory );
     }
 
+    ViewInterface* openAlways( const QString& file_name,
+                               const std::function<ViewInterface*()>& view_factory,
+                               const QString& view_context = {} )
+    {
+        openedFiles_.push_back( file_name );
+        return appSession_->openAlways( file_name, view_factory, view_context );
+    }
+
     void close( const ViewInterface* view )
     {
         auto it = std::find( openedFiles_.begin(), openedFiles_.end(), getFilename( view ) );

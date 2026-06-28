@@ -46,6 +46,9 @@ class CrawlerTabBar : public QTabBar {
 
 class TabbedCrawlerWidget : public QTabWidget {
     Q_OBJECT
+  Q_SIGNALS:
+    void openInNewWindowRequested( int tab );
+
   public:
     TabbedCrawlerWidget();
 

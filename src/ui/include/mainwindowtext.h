@@ -29,6 +29,8 @@ extern const char* trayiconTip;
 namespace action {
 extern const char* newWindowText;
 extern const char* newWindowStatusTip;
+extern const char* openInNewWindowText;
+extern const char* openInNewWindowStatusTip;
 extern const char* openText;
 extern const char* openStatusTip;
 extern const char* recentFilesCleanupText;

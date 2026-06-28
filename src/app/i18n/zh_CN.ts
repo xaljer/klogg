@@ -2001,6 +2001,11 @@
         <translation>关闭所有标签页</translation>
     </message>
     <message>
+        <location filename="../../ui/src/tabbedcrawlerwidget.cpp" line="201"/>
+        <source>Open in new window</source>
+        <translation>在新窗口中打开</translation>
+    </message>
+    <message>
         <location filename="../../ui/src/tabbedcrawlerwidget.cpp" line="186"/>
         <source>Copy full path</source>
         <translation>拷贝完整路径</translation>
@@ -2032,6 +2037,16 @@
         <location filename="../../ui/src/mainwindowtext.cpp" line="30"/>
         <source>Create new klogg window</source>
         <translation>创建新klogg窗口</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="31"/>
+        <source>Open in new window</source>
+        <translation>在新窗口中打开</translation>
+    </message>
+    <message>
+        <location filename="../../ui/src/mainwindowtext.cpp" line="32"/>
+        <source>Open current file in a new klogg window</source>
+        <translation>在新klogg窗口中打开当前文件</translation>
     </message>
     <message>
         <location filename="../../ui/src/mainwindowtext.cpp" line="31"/>

@@ -609,8 +609,9 @@ void PatternInputWidget::parsePatterns( const QString& text )
     }
 
     // Prepend include chips before exclude chips
-    for ( int i = includeChips.size() - 1; i >= 0; --i ) {
-        chips_.insert( 0, includeChips.at( i ) );
+    const int incCount = static_cast<int>( includeChips.size() );
+    for ( int i = incCount; i > 0; --i ) {
+        chips_.insert( 0, includeChips.at( i - 1 ) );
     }
 }
 
@@ -786,7 +787,7 @@ void PatternInputWidget::updateChips()
 {
     clearChips();
 
-    for ( int i = 0; i < chips_.size(); ++i ) {
+    for ( int i = 0; i < static_cast<int>( chips_.size() ); ++i ) {
         if ( !chips_[ i ].terms.isEmpty() ) {
             QWidget* chip = createChipWidget( chips_[ i ], i );
             chipsLayout_->insertWidget( i, chip );

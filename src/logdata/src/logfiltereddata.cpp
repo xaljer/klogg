@@ -88,6 +88,12 @@ LogFilteredData::LogFilteredData( const LogData* logData )
              &LogFilteredData::handleSearchProgressedThrottled );
 }
 
+LogFilteredData::~LogFilteredData()
+{
+    searchProgressThrottler_.disconnect( this );
+    workerThread_.waitForCompletion();
+}
+
 void LogFilteredData::runSearch( const RegularExpressionPattern& regExp )
 {
     runSearch( regExp, 0_lnum, LineNumber( getNbTotalLines().get() ) );

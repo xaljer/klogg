@@ -182,14 +182,19 @@ LogFilteredDataWorker::LogFilteredDataWorker( const LogData& sourceLogData )
 LogFilteredDataWorker::~LogFilteredDataWorker() noexcept
 {
     try {
-        interruptRequested_.set();
-        ScopedLock locker( operationsMutex_ );
-        operationsPool_.waitForDone();
-        QCoreApplication::removePostedEvents( this );
+        waitForCompletion();
         LOG_INFO << "LogFilteredDataWorker shutdown";
     } catch ( const std::exception& e ) {
         LOG_ERROR << "Failed to destroy LogFilteredDataWorker: " << e.what();
     }
+}
+
+void LogFilteredDataWorker::waitForCompletion()
+{
+    interruptRequested_.set();
+    ScopedLock locker( operationsMutex_ );
+    operationsPool_.waitForDone();
+    QCoreApplication::removePostedEvents( this );
 }
 
 void LogFilteredDataWorker::connectSignalsAndRun( SearchOperation* operationRequested )

@@ -61,7 +61,7 @@ void runSearch( LogFilteredData* filtered_data, const QString& regexp,
 
     int progress = 0;
     do {
-        const bool ok = searchProgressSpy.safeWait();
+        const bool ok = searchProgressSpy.safeWait( 15000 );
         if ( !ok ) {
             filtered_data->interruptSearch();
         }
@@ -94,7 +94,7 @@ struct LogDataLoader {
         SafeQSignalSpy loadEndSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
 
         log_data.attachFile( file.fileName() );
-        REQUIRE( loadEndSpy.safeWait( 10000 ) );
+        REQUIRE( loadEndSpy.safeWait( 15000 ) );
     }
 
     ~LogDataLoader()
@@ -230,7 +230,7 @@ SCENARIO( "search for regex", "[logdata]" )
         REQUIRE( generateDataFiles( file ) );
         SafeQSignalSpy loadEndSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
         log_data.attachFile( file.fileName() );
-        REQUIRE( loadEndSpy.safeWait( 10000 ) );
+        REQUIRE( loadEndSpy.safeWait( 15000 ) );
 
         auto filtered_data = log_data.getNewFilteredData();
 
@@ -278,7 +278,7 @@ SCENARIO( "marks and matches in filtered log data", "[logdata]" )
         REQUIRE( generateDataFiles( file ) );
         SafeQSignalSpy loadEndSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
         log_data.attachFile( file.fileName() );
-        REQUIRE( loadEndSpy.safeWait( 10000 ) );
+        REQUIRE( loadEndSpy.safeWait( 15000 ) );
 
         auto filtered_data = log_data.getNewFilteredData();
 

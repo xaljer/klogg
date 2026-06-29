@@ -206,6 +206,9 @@ public:
     // Interrupts the search if one is in progress
     void interrupt();
 
+    // Interrupts and waits for the search to finish, cleans up posted events.
+    void waitForCompletion();
+
     // get the current indexing data
     SearchResults getSearchResults() const;
 

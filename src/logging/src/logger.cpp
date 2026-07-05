@@ -92,7 +92,7 @@ class Logger {
         setMessageHandler();
     }
 
-    void enableFileLogging( bool isEnabled, uint8_t logLevel )
+    void enableFileLogging( bool isEnabled, uint8_t logLevel, const QString& logDirectory )
     {
         ScopedLock lock( mutex_ );
 
@@ -101,13 +101,16 @@ class Logger {
         isFileLogEnabled_ = isEnabled;
         logLevel_ = logLevel;
 
-        if ( isEnabled && !logFile_ ) {
+        if ( isEnabled && !logFile_ && !logDirectory.isEmpty() ) {
             auto logFileName
                 = QString( "klogg_%1_%2.log" )
                       .arg( QDateTime::currentDateTime().toString( "yyyy-MM-dd_HH-mm-ss" ) )
                       .arg( QCoreApplication::applicationPid() );
 
-            logFile_ = std::make_unique<QFile>( QDir::temp().filePath( logFileName ) );
+            auto logDir = QDir( logDirectory );
+            logDir.mkpath( "." );
+
+            logFile_ = std::make_unique<QFile>( logDir.filePath( logFileName ) );
             if ( !logFile_->open( QIODevice::WriteOnly | QIODevice::Append ) ) {
                 logFile_.reset();
             }
@@ -117,6 +120,15 @@ class Logger {
         }
 
         setMessageHandler();
+    }
+
+    QString getLogFilePath() const
+    {
+        ScopedLock lock( mutex_ );
+        if ( logFile_ ) {
+            return logFile_->fileName();
+        }
+        return {};
     }
 
     bool isAnyEnabled() const
@@ -186,9 +198,14 @@ void enableLogging( bool isEnabled, LogLevel logLevel )
     Logger::instance().enableLogging( isEnabled, static_cast<uint8_t>( logLevel ) );
 }
 
-void enableFileLogging( bool isEnabled, LogLevel logLevel )
+void enableFileLogging( bool isEnabled, LogLevel logLevel, const QString& logDirectory )
 {
-    Logger::instance().enableFileLogging( isEnabled, static_cast<uint8_t>( logLevel ) );
+    Logger::instance().enableFileLogging( isEnabled, static_cast<uint8_t>( logLevel ), logDirectory );
+}
+
+QString logFilePath()
+{
+    return Logger::instance().getLogFilePath();
 }
 
 void kloggFileMessageHandler( QtMsgType type, const QMessageLogContext& context,

@@ -41,6 +41,10 @@
 #include <qapplication.h>
 #include <qthreadpool.h>
 
+#include <QDir>
+#include <QFileInfo>
+#include <QSysInfo>
+
 #ifdef Q_OS_WIN
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -68,6 +72,24 @@ const bool PersistentInfo::ForcePortable = true;
 #else
 const bool PersistentInfo::ForcePortable = false;
 #endif
+
+namespace {
+
+QString determineLogDirectory()
+{
+#if defined( KLOGG_PORTABLE )
+    return QCoreApplication::applicationDirPath() + QDir::separator() + "log";
+#elif defined( Q_OS_WIN )
+    return QDir::temp().filePath( "klogg" );
+#else
+    const auto appDir = QCoreApplication::applicationDirPath();
+    const auto portableConfig = appDir + QDir::separator() + "klogg.conf";
+    return QFileInfo::exists( portableConfig ) ? ( appDir + QDir::separator() + "log" )
+                                               : QDir::temp().filePath( "klogg" );
+#endif
+}
+
+} // namespace
 
 void setApplicationAttributes( bool enableQtHdpi, int scaleFactorRounding )
 {
@@ -115,15 +137,34 @@ void setApplicationAttributes( bool enableQtHdpi, int scaleFactorRounding )
 
 int main( int argc, char* argv[] )
 {
+    const auto logDirectory = determineLogDirectory();
+    logging::enableFileLogging( true, logging::LogLevel::Info, logDirectory );
+
+    LOG_INFO << "Klogg starting, log file " << logging::logFilePath();
+
+    QStringList args;
+    for ( int i = 0; i < argc; ++i ) {
+        args << QString::fromLocal8Bit( argv[ i ] );
+    }
+    LOG_INFO << "Command line:" << args.join( " " );
+
 #ifdef KLOGG_USE_MIMALLOC
     mi_process_init();
+    LOG_INFO << "Mimalloc initialized";
 #endif
 
     const auto& config = Configuration::getSynced();
+    LOG_INFO << "Configuration loaded";
+
     setApplicationAttributes( config.enableQtHighDpi(), config.scaleFactorRounding() );
 
+    LOG_INFO << "Creating QApplication";
     KloggApp app( argc, argv );
+    LOG_INFO << "QApplication created, version " << kloggVersion();
 
+    LOG_INFO << "Initializing crash handler";
+    app.initCrashHandler( logDirectory );
+    LOG_INFO << "Crash handler initialized";
 
     MainWindow::installLanguage( config.language() );
     CliParameters parameters( app );
@@ -131,17 +172,26 @@ int main( int argc, char* argv[] )
     const auto logLevel
         = static_cast<logging::LogLevel>( std::max( parameters.log_level, config.loggingLevel() ) );
     logging::enableLogging( parameters.enable_logging || config.enableLogging(), logLevel );
-    logging::enableFileLogging( parameters.log_to_file || config.enableLogging(), logLevel );
+    logging::enableFileLogging( parameters.log_to_file || config.enableLogging(), logLevel,
+                                logDirectory );
 
-    app.initCrashHandler();
+    LOG_INFO << "Klogg init complete, pid " << QCoreApplication::applicationPid();
+
+    LOG_INFO << "System: " << QSysInfo::prettyProductName()
+             << ", " << QSysInfo::currentCpuArchitecture()
+             << ", Qt " << QT_VERSION_STR
+             << ", concurrency " << tbb::global_control::active_value(
+                                        tbb::global_control::max_allowed_parallelism )
+#ifdef KLOGG_USE_MIMALLOC
+             << ", mimalloc v" << mi_version()
+#endif
+#ifdef KLOGG_HAS_HS
+             << ", hyperscan"
+#endif
+        ;
 
     auto maxConcurrency
         = tbb::global_control::active_value( tbb::global_control::max_allowed_parallelism );
-
-    LOG_INFO << "Klogg instance"
-             << ", mimalloc v" << mi_version()
-             << ", default concurrency " << maxConcurrency;
-
 
     roaring_memory_t roaring_memory_allocators;
     roaring_memory_allocators.malloc = mi_malloc;

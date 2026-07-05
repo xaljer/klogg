@@ -138,9 +138,12 @@ MainWindow::MainWindow( WindowSession session )
     setAcceptDrops( true );
 
     // Default geometry
-    const QRect geometry = QApplication::primaryScreen()->availableGeometry();
-    setGeometry( geometry.x() + 20, geometry.y() + 40, geometry.width() - 140,
-                 geometry.height() - 140 );
+    const auto* screen = QApplication::primaryScreen();
+    if ( screen ) {
+        const QRect geometry = screen->availableGeometry();
+        setGeometry( geometry.x() + 20, geometry.y() + 40, geometry.width() - 140,
+                     geometry.height() - 140 );
+    }
 
     mainIcon_.addFile( ":/images/hicolor/16x16/klogg.png" );
     // mainIcon_.addFile( ":/images/hicolor/24x24/klogg.png" );

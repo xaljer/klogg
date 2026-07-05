@@ -3,6 +3,7 @@ add_library(
   ${CMAKE_CURRENT_SOURCE_DIR}/include/crashhandler.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/issuereporter.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/memory_info.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/crashhandler.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/issuereporter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/memory_info.cpp
 )
@@ -23,7 +24,6 @@ target_link_libraries(
 
 if(KLOGG_USE_SENTRY)
   target_compile_definitions(klogg_crash_handler PUBLIC -DKLOGG_USE_SENTRY)
-  target_sources(klogg_crash_handler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/crashhandler.cpp)
   target_link_libraries(klogg_crash_handler PUBLIC sentry crashpad_client)
 endif()
 

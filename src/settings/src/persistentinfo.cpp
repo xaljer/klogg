@@ -72,6 +72,7 @@ PersistentInfo::PersistentInfo()
 
     int dirnameLength = 0;
     const auto executablePathLength = wai_getExecutablePath( NULL, 0, &dirnameLength );
+    LOG_INFO << "Executable path length " << executablePathLength;
     if ( executablePathLength > 0 ) {
         auto path = std::vector<char>( static_cast<size_t>( executablePathLength ), '\0' );
         wai_getExecutablePath( &path[ 0 ], executablePathLength, &dirnameLength );
@@ -82,8 +83,11 @@ PersistentInfo::PersistentInfo()
         = executablePath + QDir::separator() + ApplicationSessionFile + PortableExtension;
 
     LOG_INFO << "Portable config path " << portableConfigPath;
+    LOG_INFO << "Force portable " << ForcePortable;
 
     const auto usePortableConfiguration = ForcePortable || QFileInfo::exists( portableConfigPath );
+
+    LOG_INFO << "Use portable configuration " << usePortableConfiguration;
 
     if ( usePortableConfiguration ) {
         PreparePortableSettings( portableConfigPath );

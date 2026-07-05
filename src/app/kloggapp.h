@@ -63,7 +63,15 @@ class KloggApp : public QApplication {
     KloggApp( int& argc, char* argv[] )
         : QApplication( argc, argv)
     {
-        QFontDatabase::addApplicationFont( ":/fonts/DejaVuSansMono.ttf" );
+        const auto fontId = QFontDatabase::addApplicationFont( ":/fonts/DejaVuSansMono.ttf" );
+        if ( fontId != -1 ) {
+            LOG_INFO << "Font loaded, families: "
+                     << QFontDatabase::applicationFontFamilies( fontId );
+        }
+        else {
+            LOG_WARNING << "Failed to load application font";
+        }
+        LOG_INFO << "App version " << kloggVersion();
 
         QNetworkProxyFactory::setUseSystemConfiguration( true );
 
@@ -110,8 +118,7 @@ class KloggApp : public QApplication {
     void sendFilesToPrimaryInstance( std::vector<QString> filenames )
     {
 #ifdef Q_OS_WIN
-        // TODO: fix pid passing
-        ::AllowSetForegroundWindow( static_cast<DWORD>( primaryPid() ) );
+        ::AllowSetForegroundWindow( ASFW_ANY );
 #endif
 
         QTimer::singleShot( 100, [ files = std::move( filenames ), this ] {
@@ -129,9 +136,9 @@ class KloggApp : public QApplication {
         } );
     }
 
-    void initCrashHandler()
+    void initCrashHandler( const QString& dumpDirectory = {} )
     {
-        crashHandler_ = std::make_unique<CrashHandler>();
+        crashHandler_ = std::make_unique<CrashHandler>( dumpDirectory );
     }
 
     MainWindow* reloadSession()

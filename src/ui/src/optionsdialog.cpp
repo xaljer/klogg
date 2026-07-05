@@ -807,7 +807,7 @@ void OptionsDialog::updateDialogFromConfig()
     multipleWindowsCheckBox->setChecked( config.allowMultipleWindows() );
 
     loggingCheckBox->setChecked( config.enableLogging() );
-    verbositySpinBox->setValue( config.loggingLevel() );
+    verbositySpinBox->setCurrentIndex( config.loggingLevel() );
 
     extractArchivesCheckBox->setChecked( config.extractArchives() );
     extractArchivesAlwaysCheckBox->setChecked( config.extractArchivesAlways() );
@@ -1121,7 +1121,7 @@ void OptionsDialog::updateConfigFromDialog()
     config.setAllowMultipleWindows( multipleWindowsCheckBox->isChecked() );
     config.setMinimizeToTray( minimizeToTrayCheckBox->isChecked() );
     config.setEnableLogging( loggingCheckBox->isChecked() );
-    config.setLoggingLevel( verbositySpinBox->value() );
+    config.setLoggingLevel( verbositySpinBox->currentIndex() );
 
     config.setExtractArchives( extractArchivesCheckBox->isChecked() );
     config.setExtractArchivesAlways( extractArchivesAlwaysCheckBox->isChecked() );

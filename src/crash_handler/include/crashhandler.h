@@ -20,25 +20,26 @@
 #ifndef KLOGG_CRASHHANDLER
 #define KLOGG_CRASHHANDLER
 
-#ifdef KLOGG_USE_SENTRY
-
 #include <memory>
 
+#include <QString>
+
+#ifdef KLOGG_USE_SENTRY
 class QTimer;
+#endif
+
 class CrashHandler {
   public:
-    CrashHandler();
+    explicit CrashHandler( const QString& dumpDirectory );
     ~CrashHandler();
 
+    CrashHandler( const CrashHandler& ) = delete;
+    CrashHandler& operator=( const CrashHandler& ) = delete;
+
   private:
+#ifdef KLOGG_USE_SENTRY
     std::unique_ptr<QTimer> memoryUsageTimer_;
-};
-#else
-class CrashHandler {
-  public:
-    CrashHandler() = default;
-    ~CrashHandler() = default;
-};
 #endif
+};
 
 #endif

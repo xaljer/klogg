@@ -19,10 +19,19 @@
 
 #include "crashhandler.h"
 
+#include <cstdint>
+#include <cstdlib>
+#include <string_view>
+
 #include <QByteArray>
+#include <QCoreApplication>
+#include <QDir>
+#include <QStandardPaths>
+
+#ifdef KLOGG_USE_SENTRY
+#include <qthreadpool.h>
 #include <QDialog>
 #include <QDialogButtonBox>
-#include <QDir>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
@@ -30,15 +39,10 @@
 #include <QProcess>
 #include <QProgressDialog>
 #include <QPushButton>
-#include <QStandardPaths>
 #include <QSysInfo>
 #include <QTimer>
 #include <QUrlQuery>
 #include <QVBoxLayout>
-#include <cstdint>
-#include <cstdlib>
-#include <qthreadpool.h>
-#include <string_view>
 
 #ifdef KLOGG_USE_MIMALLOC
 #include <mimalloc.h>
@@ -46,6 +50,11 @@
 
 #include "client/crash_report_database.h"
 #include "sentry.h"
+#endif
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 #include "cpu_info.h"
 #include "issuereporter.h"
@@ -54,6 +63,7 @@
 #include "memory_info.h"
 #include "openfilehelper.h"
 
+#ifdef KLOGG_USE_SENTRY
 namespace {
 
 constexpr const char* DSN
@@ -220,12 +230,20 @@ bool checkCrashpadReports( const QString& databasePath )
 }
 } // namespace
 
-CrashHandler::CrashHandler()
+CrashHandler::CrashHandler( const QString& dumpDirectory )
 {
+    (void)dumpDirectory;
+
+    LOG_INFO << "CrashHandler initializing";
+
     const auto dumpPath = sentryDatabasePath();
     const auto hasDumpDir = QDir{ dumpPath }.mkpath( "." );
 
+    LOG_INFO << "Crashpad database path " << dumpPath << ", hasDumpDir " << hasDumpDir;
+
     const auto needWaitForUpload = hasDumpDir ? checkCrashpadReports( dumpPath ) : false;
+
+    LOG_INFO << "Crashpad reports checked, needWaitForUpload " << needWaitForUpload;
 
     sentry_options_t* sentryOptions = sentry_options_new();
 
@@ -255,6 +273,8 @@ CrashHandler::CrashHandler()
     sentry_options_set_release( sentryOptions, kloggVersion().data() );
 
     sentry_init( sentryOptions );
+
+    LOG_INFO << "Sentry initialized";
 
     sentry_set_tag( "commit", kloggCommit().data() );
     sentry_set_tag( "qt", qVersion() );
@@ -309,3 +329,221 @@ CrashHandler::~CrashHandler()
     memoryUsageTimer_->stop();
     sentry_close();
 }
+#elif defined( Q_OS_WIN )
+namespace {
+
+wchar_t g_dumpDirectory[ MAX_PATH ] = { 0 };
+
+const wchar_t* exceptionCodeToString( DWORD code )
+{
+    switch ( code ) {
+    case EXCEPTION_ACCESS_VIOLATION:
+        return L"ACCESS_VIOLATION";
+    case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+        return L"ARRAY_BOUNDS_EXCEEDED";
+    case EXCEPTION_DATATYPE_MISALIGNMENT:
+        return L"DATATYPE_MISALIGNMENT";
+    case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+        return L"FLT_DIVIDE_BY_ZERO";
+    case EXCEPTION_FLT_INVALID_OPERATION:
+        return L"FLT_INVALID_OPERATION";
+    case EXCEPTION_FLT_OVERFLOW:
+        return L"FLT_OVERFLOW";
+    case EXCEPTION_FLT_UNDERFLOW:
+        return L"FLT_UNDERFLOW";
+    case EXCEPTION_ILLEGAL_INSTRUCTION:
+        return L"ILLEGAL_INSTRUCTION";
+    case EXCEPTION_INT_DIVIDE_BY_ZERO:
+        return L"INT_DIVIDE_BY_ZERO";
+    case EXCEPTION_INT_OVERFLOW:
+        return L"INT_OVERFLOW";
+    case EXCEPTION_PRIV_INSTRUCTION:
+        return L"PRIV_INSTRUCTION";
+    case EXCEPTION_STACK_OVERFLOW:
+        return L"STACK_OVERFLOW";
+    default:
+        return L"UNKNOWN";
+    }
+}
+
+void writeLineToFile( HANDLE hFile, const wchar_t* line )
+{
+    DWORD written;
+    const auto len = static_cast<DWORD>( wcslen( line ) * sizeof( wchar_t ) );
+    WriteFile( hFile, line, len, &written, nullptr );
+    const wchar_t nl = L'\n';
+    WriteFile( hFile, &nl, sizeof( wchar_t ), &written, nullptr );
+}
+
+LONG WINAPI unhandledExceptionFilter( PEXCEPTION_POINTERS exceptionInfo )
+{
+    if ( g_dumpDirectory[ 0 ] == 0 ) {
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+
+    wchar_t tracePath[ MAX_PATH ];
+    SYSTEMTIME st;
+    GetLocalTime( &st );
+    wsprintfW( tracePath,
+               L"%s\\klogg_backtrace_%04d-%02d-%02d_%02d-%02d-%02d.txt",
+               g_dumpDirectory, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond );
+
+    HANDLE hFile = CreateFileW( tracePath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL, nullptr );
+    if ( hFile == INVALID_HANDLE_VALUE ) {
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+
+    wchar_t line[ 512 ];
+
+    writeLineToFile( hFile, L"Klogg crash report" );
+
+    wsprintfW( line, L"Exception code: 0x%08lX (%s)", exceptionInfo->ExceptionRecord->ExceptionCode,
+               exceptionCodeToString( exceptionInfo->ExceptionRecord->ExceptionCode ) );
+    writeLineToFile( hFile, line );
+
+    wsprintfW( line, L"Fault address: 0x%p", exceptionInfo->ExceptionRecord->ExceptionAddress );
+    writeLineToFile( hFile, line );
+
+    writeLineToFile( hFile, L"" );
+    writeLineToFile( hFile, L"Stack trace:" );
+
+    constexpr int kMaxFrames = 62;
+    void* frames[ kMaxFrames ];
+    const USHORT frameCount = RtlCaptureStackBackTrace( 0, kMaxFrames, frames, nullptr );
+
+    for ( USHORT i = 0; i < frameCount; ++i ) {
+        HMODULE module = nullptr;
+        wchar_t moduleName[ MAX_PATH ] = { 0 };
+
+        MEMORY_BASIC_INFORMATION mbi;
+        if ( VirtualQuery( frames[ i ], &mbi, sizeof( mbi ) )
+             && mbi.Type == MEM_IMAGE ) {
+            module = static_cast<HMODULE>( mbi.AllocationBase );
+        }
+
+        const wchar_t* moduleNamePtr = L"<unknown>";
+        if ( module && GetModuleFileNameW( module, moduleName, MAX_PATH ) ) {
+            const auto* fileName = wcsrchr( moduleName, L'\\' );
+            moduleNamePtr = fileName ? ( fileName + 1 ) : moduleName;
+        }
+
+        const auto offset = reinterpret_cast<uintptr_t>( frames[ i ] )
+                            - reinterpret_cast<uintptr_t>( module );
+
+        wsprintfW( line, L"  #%u: %s+0x%llX", i, moduleNamePtr,
+                   static_cast<unsigned long long>( offset ) );
+        writeLineToFile( hFile, line );
+    }
+
+    CloseHandle( hFile );
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+void writeBacktraceFile( const wchar_t* reason )
+{
+    if ( g_dumpDirectory[ 0 ] == 0 ) {
+        return;
+    }
+
+    wchar_t tracePath[ MAX_PATH ];
+    SYSTEMTIME st;
+    GetLocalTime( &st );
+    wsprintfW( tracePath,
+               L"%s\\klogg_backtrace_%04d-%02d-%02d_%02d-%02d-%02d.txt",
+               g_dumpDirectory, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond );
+
+    HANDLE hFile = CreateFileW( tracePath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL, nullptr );
+    if ( hFile == INVALID_HANDLE_VALUE ) {
+        return;
+    }
+
+    wchar_t line[ 512 ];
+
+    writeLineToFile( hFile, L"Klogg crash report" );
+    wsprintfW( line, L"Termination reason: %s", reason );
+    writeLineToFile( hFile, line );
+    writeLineToFile( hFile, L"" );
+    writeLineToFile( hFile, L"Stack trace:" );
+
+    constexpr int kMaxFrames = 62;
+    void* frames[ kMaxFrames ];
+    const USHORT frameCount = RtlCaptureStackBackTrace( 0, kMaxFrames, frames, nullptr );
+
+    for ( USHORT i = 0; i < frameCount; ++i ) {
+        HMODULE module = nullptr;
+        wchar_t moduleName[ MAX_PATH ] = { 0 };
+
+        MEMORY_BASIC_INFORMATION mbi;
+        if ( VirtualQuery( frames[ i ], &mbi, sizeof( mbi ) )
+             && mbi.Type == MEM_IMAGE ) {
+            module = static_cast<HMODULE>( mbi.AllocationBase );
+        }
+
+        const wchar_t* moduleNamePtr = L"<unknown>";
+        if ( module && GetModuleFileNameW( module, moduleName, MAX_PATH ) ) {
+            const auto* fileName = wcsrchr( moduleName, L'\\' );
+            moduleNamePtr = fileName ? ( fileName + 1 ) : moduleName;
+        }
+
+        const auto offset = reinterpret_cast<uintptr_t>( frames[ i ] )
+                            - reinterpret_cast<uintptr_t>( module );
+
+        wsprintfW( line, L"  #%u: %s+0x%llX", i, moduleNamePtr,
+                   static_cast<unsigned long long>( offset ) );
+        writeLineToFile( hFile, line );
+    }
+
+    CloseHandle( hFile );
+}
+
+void terminateHandler()
+{
+    writeBacktraceFile( L"std::terminate" );
+    abort();
+}
+
+void __cdecl purecallHandler()
+{
+    writeBacktraceFile( L"pure virtual function call" );
+    abort();
+}
+
+void __cdecl invalidParameterHandler( const wchar_t*, const wchar_t*, const wchar_t*,
+                                      unsigned int, uintptr_t )
+{
+    writeBacktraceFile( L"CRT invalid parameter" );
+    abort();
+}
+
+} // namespace
+
+CrashHandler::CrashHandler( const QString& dumpDirectory )
+{
+    const auto dir = dumpDirectory.isEmpty()
+                         ? QStandardPaths::writableLocation( QStandardPaths::TempLocation )
+                               + QDir::separator() + "klogg"
+                         : dumpDirectory;
+    QDir{ dir }.mkpath( "." );
+    wcsncpy_s( g_dumpDirectory, dir.toStdWString().c_str(), MAX_PATH - 1 );
+
+    SetUnhandledExceptionFilter( unhandledExceptionFilter );
+    std::set_terminate( terminateHandler );
+    _set_purecall_handler( purecallHandler );
+    _set_invalid_parameter_handler( invalidParameterHandler );
+}
+
+CrashHandler::~CrashHandler()
+{
+    SetUnhandledExceptionFilter( nullptr );
+}
+#else
+CrashHandler::CrashHandler( const QString& )
+{
+}
+
+CrashHandler::~CrashHandler()
+{
+}
+#endif

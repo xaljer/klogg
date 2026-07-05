@@ -250,7 +250,7 @@ class KloggApp : public QApplication {
         activeWindows_.push( QPointer<MainWindow>( window ) );
 
         LOG_INFO << "Window " << &window << " created";
-        connect( window, &MainWindow::newWindow, [ = ]() { newWindow()->show(); } );
+        connect( window, &MainWindow::newWindow, [ =, this ]() { newWindow()->show(); } );
         connect( window, &MainWindow::openFileInNewWindow,
                  [ this ]( const QString& fileName, uint64_t topLine, const QString& viewContext,
                            const QString& searchText ) {

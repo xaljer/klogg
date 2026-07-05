@@ -493,7 +493,7 @@ void MainWindow::createActions()
 
     newWindowAction = new QAction( tr( action::newWindowText ), this );
     newWindowAction->setStatusTip( tr( action::newWindowStatusTip ) );
-    connect( newWindowAction, &QAction::triggered, [ = ] { Q_EMIT newWindow(); } );
+    connect( newWindowAction, &QAction::triggered, [ =, this ] { Q_EMIT newWindow(); } );
     newWindowAction->setVisible( config.allowMultipleWindows() );
 
     openInNewWindowAction = new QAction( tr( action::openInNewWindowText ), this );

@@ -30,6 +30,9 @@ namespace klogg {
 template <typename T>
 using vector = std::vector<T, mi_stl_allocator<T>>;
 
+#if __cpp_lib_ssize >= 201902L
+using std::ssize;
+#else
 template <class C>
 constexpr auto ssize( const C& c )
     -> std::common_type_t<std::ptrdiff_t, std::make_signed_t<decltype( c.size() )>>
@@ -37,6 +40,7 @@ constexpr auto ssize( const C& c )
     using R = std::common_type_t<std::ptrdiff_t, std::make_signed_t<decltype( c.size() )>>;
     return static_cast<R>( c.size() );
 }
+#endif
 
 template <class C>
 constexpr int isize( const C& c )

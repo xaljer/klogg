@@ -46,7 +46,11 @@ if(KLOGG_USE_HYPERSCAN)
     0931a40e0cf1d7f92189bc546c3491ed5c113f8b
     EXCLUDE_FROM_ALL
     YES
+    OPTIONS
+    "CMAKE_CXX_STANDARD 17"
+    "CMAKE_CXX_STANDARD_REQUIRED ON"
   )
+  
   message("Adding alias for hyperscan")
   add_library(klogg_hyperscan INTERFACE)
   target_link_libraries(klogg_hyperscan INTERFACE hs)
@@ -73,6 +77,8 @@ elseif(KLOGG_USE_VECTORSCAN)
     "BUIlD_AVX512 OFF"
     "BUIlD_AVX512VBMI OFF"
     "FAT_RUNTIME OFF"
+    "CMAKE_CXX_STANDARD 17"
+    "CMAKE_CXX_STANDARD_REQUIRED ON"
   )
  
   message("Adding alias for vectorscan")
@@ -138,7 +144,7 @@ cpmaddpackage(
   GITHUB_REPOSITORY
   martinus/robin-hood-hashing
   GIT_TAG
-  3.11.2
+  3.11.5
   EXCLUDE_FROM_ALL
   YES
 )

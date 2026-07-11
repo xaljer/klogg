@@ -45,6 +45,7 @@
 #include <QtConcurrent>
 
 #include "abstractlogdata.h"
+#include "ansi_parser.h"
 #include "dispatch_to.h"
 #include "linetypes.h"
 #include "log.h"
@@ -283,6 +284,13 @@ Portion QuickFind::doSearchForward( const Selection& selection, const QuickFindM
     return doSearchForward( selection.getNextPosition(), selection, matcher );
 }
 
+QString QuickFind::displayLineString( LineNumber line ) const
+{
+    return AnsiSgrParser::processDisplayLine( logData_.getExpandedLineString( line ), QColor(),
+                                              QColor() )
+        .text;
+}
+
 // Internal implementation of forward search,
 // returns the line where the pattern is found or -1 if not found.
 // Parameters are the position the search shall start
@@ -310,8 +318,7 @@ Portion QuickFind::doSearchForward( const FilePosition& start_position, const Se
     auto line = start_position.line();
     LOG_DEBUG << "Start searching at line " << line;
     // We look at the rest of the first line
-    if ( matcher.isLineMatching( logData_.getExpandedLineString( line ),
-                                 start_position.column() ) ) {
+    if ( matcher.isLineMatching( displayLineString( line ), start_position.column() ) ) {
         std::tie( found_start_col, found_end_col ) = matcher.getLastMatch();
         found = true;
     }
@@ -321,7 +328,7 @@ Portion QuickFind::doSearchForward( const FilePosition& start_position, const Se
         const auto nb_lines = logData_.getNbLine();
         ++line;
         while ( line < nb_lines ) {
-            if ( matcher.isLineMatching( logData_.getExpandedLineString( line ) ) ) {
+            if ( matcher.isLineMatching( displayLineString( line ) ) ) {
                 std::tie( found_start_col, found_end_col ) = matcher.getLastMatch();
                 found = true;
                 break;
@@ -394,7 +401,7 @@ Portion QuickFind::doSearchBackward( const FilePosition& start_position, const S
     LOG_DEBUG << "Start searching at line " << line;
     // We look at the beginning of the first line
     if ( ( start_position.column() > 0_lcol )
-         && ( matcher.isLineMatchingBackward( logData_.getExpandedLineString( line ),
+         && ( matcher.isLineMatchingBackward( displayLineString( line ),
                                               start_position.column() ) ) ) {
         std::tie( start_col, end_col ) = matcher.getLastMatch();
         found = true;
@@ -406,7 +413,7 @@ Portion QuickFind::doSearchBackward( const FilePosition& start_position, const S
         if ( line > 0_lnum ) {
             --line;
             while ( true ) {
-                if ( matcher.isLineMatchingBackward( logData_.getExpandedLineString( line ) ) ) {
+                if ( matcher.isLineMatchingBackward( displayLineString( line ) ) ) {
                     std::tie( start_col, end_col ) = matcher.getLastMatch();
                     found = true;
                     break;

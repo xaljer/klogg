@@ -203,11 +203,12 @@ Selection::getSelectionWithLineNumbers( const AbstractLogData* logData ) const
     else if ( selectedPartial_.line.has_value() ) {
         auto expandedLine
             = logData->getExpandedLineString( *selectedPartial_.line );
-        const auto ansiResult = AnsiSgrParser::parseLine(
-            expandedLine, AnsiProcessing::StripOnly, QColor(), QColor() );
+        auto displayText
+            = AnsiSgrParser::processDisplayLine( std::move( expandedLine ), QColor(), QColor() )
+                  .text;
         selectionData.emplace(
             logData->getLineNumber( selectedPartial_.line.value() ),
-            std::move( ansiResult.cleanText )
+            std::move( displayText )
                 .mid( selectedPartial_.startColumn.get(),
                       selectedPartial_.size().get() ) );
     }

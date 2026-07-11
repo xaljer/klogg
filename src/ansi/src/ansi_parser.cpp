@@ -290,3 +290,15 @@ AnsiParseResult AnsiSgrParser::parseLine( const QString& line, AnsiProcessing mo
 
     return { std::move( cleanText ), std::move( segments ) };
 }
+
+AnsiDisplayLine AnsiSgrParser::processDisplayLine( QString expandedLine, const QColor& defaultFg,
+                                                   const QColor& defaultBg )
+{
+    const auto mode = Configuration::get().ansiProcessing();
+    if ( mode == AnsiProcessing::None || !expandedLine.contains( QChar( 0x1B ) ) ) {
+        return { std::move( expandedLine ), {} };
+    }
+
+    auto result = parseLine( expandedLine, mode, defaultFg, defaultBg );
+    return { std::move( result.cleanText ), std::move( result.segments ) };
+}

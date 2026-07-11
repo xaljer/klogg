@@ -223,6 +223,11 @@ class QuickFind : public QObject {
     IncrementalSearchStatus incrementalSearchStatus_;
 
     // Private functions
+
+    // Line text in the display coordinate space (ANSI processed per the current
+    // mode) so match columns align with what is rendered, selected and copied.
+    QString displayLineString( LineNumber line ) const;
+
     Portion doSearchForward( const Selection& selection, const QuickFindMatcher& matcher );
     Portion doSearchForward( const FilePosition& start_position, const Selection& selection,
                              const QuickFindMatcher& matcher );

@@ -1548,7 +1548,6 @@ void AbstractLogView::copyWithColor()
             return index;
         }();
 
-        const auto ansiMode = Configuration::get().ansiProcessing();
         const QColor defaultFg = palette().color( QPalette::Text );
         const QColor defaultBg = palette().color( QPalette::Base );
 
@@ -1568,19 +1567,17 @@ void AbstractLogView::copyWithColor()
 
             QString expandedLine = untabify( std::move( rawLine ) );
 
+            auto ansiDisplay = AnsiSgrParser::processDisplayLine( std::move( expandedLine ),
+                                                                  defaultFg, defaultBg );
+            expandedLine = std::move( ansiDisplay.text );
+
             klogg::vector<HighlightedMatch> ansiMatches;
-            if ( ansiMode != AnsiProcessing::None
-                 && expandedLine.contains( QChar( 0x1B ) ) ) {
-                const auto ansiResult
-                    = AnsiSgrParser::parseLine( expandedLine, ansiMode, defaultFg, defaultBg );
-                expandedLine = ansiResult.cleanText;
-                if ( ansiMode == AnsiProcessing::RenderColors && !ansiResult.segments.empty() ) {
-                    ansiMatches.reserve( ansiResult.segments.size() );
-                    for ( const auto& seg : ansiResult.segments ) {
-                        ansiMatches.emplace_back( LineColumn{ seg.startColumn },
-                                                  LineLength{ seg.length }, seg.foreColor,
-                                                  QColor() );
-                    }
+            if ( !ansiDisplay.segments.empty() ) {
+                ansiMatches.reserve( ansiDisplay.segments.size() );
+                for ( const auto& seg : ansiDisplay.segments ) {
+                    ansiMatches.emplace_back( LineColumn{ seg.startColumn },
+                                              LineLength{ seg.length }, seg.foreColor,
+                                              QColor() );
                 }
             }
 
@@ -2162,9 +2159,8 @@ void AbstractLogView::selectWordAtPosition( const FilePosition& pos )
 {
     const QString rawLine = logData_->getExpandedLineString( pos.line() );
 
-    const auto ansiResult = AnsiSgrParser::parseLine( rawLine, AnsiProcessing::StripOnly,
-                                                       QColor(), QColor() );
-    const QString& line = ansiResult.cleanText;
+    const QString line
+        = AnsiSgrParser::processDisplayLine( rawLine, QColor(), QColor() ).text;
 
     const int clickPos = type_safe::narrow_cast<int>( pos.column().get() );
 
@@ -2385,7 +2381,10 @@ LinesCount AbstractLogView::getNbBottomWrappedVisibleLines() const
     };
 
     while ( wrappedLinesCount < visibleLines ) {
-        QString expandedLine = logData_->getExpandedLineString( unwrappedLineNumber );
+        QString expandedLine
+            = AnsiSgrParser::processDisplayLine(
+                  logData_->getExpandedLineString( unwrappedLineNumber ), QColor(), QColor() )
+                  .text;
         WrappedString wrapped{ expandedLine, availableWidth, twFn };
         const auto thisLineWrappedCount = LinesCount(
             type_safe::narrow_cast<LinesCount::UnderlyingType>( wrapped.wrappedLinesCount() ) );
@@ -2682,20 +2681,18 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
 
         auto expandedLine = untabify( std::move( logLine ) );
 
-        const auto ansiMode = Configuration::get().ansiProcessing();
-        AnsiParseResult ansiResult;
+        AnsiDisplayLine ansiDisplay;
 #ifdef KLOGG_PERF_MEASURE_ANSI
         const auto ansiT0 = std::chrono::steady_clock::now();
 #endif
-        if ( ansiMode != AnsiProcessing::None && expandedLine.contains( QChar( 0x1B ) ) ) {
-            ansiResult = AnsiSgrParser::parseLine( expandedLine, ansiMode, foreColor, backColor );
-            expandedLine = ansiResult.cleanText;
-        }
+        ansiDisplay
+            = AnsiSgrParser::processDisplayLine( std::move( expandedLine ), foreColor, backColor );
+        expandedLine = std::move( ansiDisplay.text );
 #ifdef KLOGG_PERF_MEASURE_ANSI
         const auto ansiT1 = std::chrono::steady_clock::now();
         ansiParseTime += std::chrono::duration_cast<std::chrono::microseconds>( ansiT1 - ansiT0 );
         ++ansiLinesProcessed;
-        if ( !ansiResult.segments.empty() && ansiMode == AnsiProcessing::RenderColors ) {
+        if ( !ansiDisplay.segments.empty() ) {
             ++ansiLinesWithCodes;
         }
 #endif
@@ -2716,9 +2713,9 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
             }
 
             klogg::vector<HighlightedMatch> ansiMatches;
-            if ( ansiMode == AnsiProcessing::RenderColors && !ansiResult.segments.empty() ) {
-                ansiMatches.reserve( ansiResult.segments.size() );
-                for ( const auto& seg : ansiResult.segments ) {
+            if ( !ansiDisplay.segments.empty() ) {
+                ansiMatches.reserve( ansiDisplay.segments.size() );
+                for ( const auto& seg : ansiDisplay.segments ) {
                     ansiMatches.emplace_back( LineColumn{ seg.startColumn },
                                               LineLength{ seg.length }, seg.foreColor, QColor() );
                 }

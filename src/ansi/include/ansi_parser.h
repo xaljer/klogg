@@ -37,10 +37,24 @@ struct AnsiParseResult {
     klogg::vector<AnsiSegment> segments;
 };
 
+// Text whose columns match what is drawn on screen, in a single coordinate
+// space defined by the current AnsiProcessing mode.
+struct AnsiDisplayLine {
+    QString text;
+    klogg::vector<AnsiSegment> segments;
+};
+
 class AnsiSgrParser {
 public:
     static AnsiParseResult parseLine( const QString& line, AnsiProcessing mode,
                                       const QColor& defaultFg, const QColor& defaultBg );
+
+    // Single authority for the display coordinate space. Given an untabified
+    // expanded line, returns the text (and color segments) that all producers
+    // and consumers of LineColumn must share. The mode is read here so callers
+    // cannot pick a divergent one; the no-ANSI fast path avoids any copy.
+    static AnsiDisplayLine processDisplayLine( QString expandedLine, const QColor& defaultFg,
+                                               const QColor& defaultBg );
 
 private:
     struct AnsiState {

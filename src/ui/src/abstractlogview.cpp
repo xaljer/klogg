@@ -1550,6 +1550,7 @@ void AbstractLogView::copyWithColor()
 
         const QColor defaultFg = palette().color( QPalette::Text );
         const QColor defaultBg = palette().color( QPalette::Base );
+        const QColor quickFindBackColor = Configuration::get().qfBackColor();
 
         QString html;
         html += QStringLiteral(
@@ -1583,7 +1584,7 @@ void AbstractLogView::copyWithColor()
 
             auto highlightResult = computeLineHighlightMatches(
                 expandedLine, ansiMatches, lineNumber, searchStartIndex, searchEndIndex,
-                patternHighlightPtr, additionalHighlighters );
+                patternHighlightPtr, additionalHighlighters, quickFindBackColor );
 
             const auto matchCount = highlightResult.matches.matches().size();
             totalHighlightedMatches += matchCount;
@@ -2457,7 +2458,7 @@ AbstractLogView::computeLineHighlightMatches(
     const QString& expandedLine, const klogg::vector<HighlightedMatch>& ansiSegments,
     LineNumber lineNumber, LineNumber searchStartIndex, LineNumber searchEndIndex,
     const Highlighter* patternHighlight,
-    const klogg::vector<Highlighter>& additionalHighlighters ) const
+    const klogg::vector<Highlighter>& additionalHighlighters, const QColor& quickFindBackColor ) const
 {
     HighlightedMatchRanges matches;
     auto highlightType = HighlighterMatchType::NoMatch;
@@ -2494,7 +2495,7 @@ AbstractLogView::computeLineHighlightMatches(
         }
 
         klogg::vector<HighlightedMatch> quickFindMatches;
-        quickFindPattern_->matchLine( expandedLine, quickFindMatches );
+        quickFindPattern_->matchLine( expandedLine, quickFindBackColor, quickFindMatches );
         matches.addMatches( quickFindMatches );
     }
 
@@ -2648,6 +2649,8 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
         patternHighlight->setForeColor( mainSearchForeColor );
     }
 
+    const QColor quickFindBackColor = Configuration::get().qfBackColor();
+
     klogg::vector<Highlighter> additionalHighlighters;
     for ( auto i = 0u; i < quickHighlighters_.size(); ++i ) {
         const auto quickHighlighterIndex = static_cast<int>( i );
@@ -2722,7 +2725,8 @@ void AbstractLogView::drawTextArea( QPaintDevice* paintDevice )
             }
             auto highlightResult = computeLineHighlightMatches(
                 expandedLine, ansiMatches, lineNumber, searchStartIndex, searchEndIndex,
-                patternHighlight ? &*patternHighlight : nullptr, additionalHighlighters );
+                patternHighlight ? &*patternHighlight : nullptr, additionalHighlighters,
+                quickFindBackColor );
 
             allHighlights = std::move( highlightResult.matches );
 

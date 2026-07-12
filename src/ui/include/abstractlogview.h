@@ -499,7 +499,8 @@ class AbstractLogView : public QAbstractScrollArea, public SearchableWidgetInter
         LineNumber searchStartIndex,
         LineNumber searchEndIndex,
         const Highlighter* patternHighlight,
-        const klogg::vector<Highlighter>& additionalHighlighters ) const;
+        const klogg::vector<Highlighter>& additionalHighlighters,
+        const QColor& quickFindBackColor ) const;
 
     QPixmap drawPullToFollowBar( int width, qreal pixelRatio );
 

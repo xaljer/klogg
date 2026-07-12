@@ -61,6 +61,20 @@ class QuickFindMatcher {
     {
     }
 
+    // Plain-text variant. Backward search then uses QString::lastIndexOf (a
+    // single reverse scan) instead of enumerating every match on the line with
+    // globalMatch, which is O(matches) and can cost milliseconds on lines with
+    // thousands of occurrences.
+    QuickFindMatcher( bool isActive, const QRegularExpression& regexp, const QString& plainText,
+                      Qt::CaseSensitivity caseSensitivity )
+        : isActive_( isActive )
+        , regexp_{ regexp }
+        , isPlainText_( true )
+        , plainText_( plainText )
+        , caseSensitivity_( caseSensitivity )
+    {
+    }
+
     bool isActive() const
     {
         return isActive_;
@@ -81,6 +95,10 @@ class QuickFindMatcher {
   private:
     bool isActive_ = false;
     QRegularExpression regexp_;
+
+    bool isPlainText_ = false;
+    QString plainText_;
+    Qt::CaseSensitivity caseSensitivity_ = Qt::CaseSensitive;
 
     mutable LineColumn lastMatchStart_;
     mutable LineColumn lastMatchEnd_;
@@ -115,8 +133,10 @@ class QuickFindPattern : public QObject {
 
     // Returns whether the passed line match the quick find search.
     // If so, it populate the passed list with the list of matches
-    // within this particular line.
-    bool matchLine( const QString& line, klogg::vector<HighlightedMatch>& matches ) const;
+    // within this particular line. The match background color is passed in so
+    // callers can resolve it once per frame instead of once per line.
+    bool matchLine( const QString& line, const QColor& backColor,
+                    klogg::vector<HighlightedMatch>& matches ) const;
 
     QuickFindMatcher getMatcher() const;
 
@@ -128,6 +148,10 @@ class QuickFindPattern : public QObject {
     bool active_ = false;
     QRegularExpression regexp_;
     QString pattern_;
+
+    bool isPlainText_ = false;
+    QString plainText_;
+    Qt::CaseSensitivity caseSensitivity_ = Qt::CaseSensitive;
 };
 
 #endif

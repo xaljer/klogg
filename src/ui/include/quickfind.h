@@ -39,6 +39,8 @@
 #ifndef QUICKFIND_H
 #define QUICKFIND_H
 
+#include <functional>
+
 #include <QFuture>
 #include <QFutureWatcher>
 #include <QObject>
@@ -224,17 +226,22 @@ class QuickFind : public QObject {
 
     // Private functions
 
-    // Line text in the display coordinate space (ANSI processed per the current
-    // mode) so match columns align with what is rendered, selected and copied.
-    QString displayLineString( LineNumber line ) const;
-
-    Portion doSearchForward( const Selection& selection, const QuickFindMatcher& matcher );
     Portion doSearchForward( const FilePosition& start_position, const Selection& selection,
                              const QuickFindMatcher& matcher );
-    Portion doSearchBackward( const Selection& selection, const QuickFindMatcher& matcher );
     Portion doSearchBackward( const FilePosition& start_position, const Selection& selection,
                               const QuickFindMatcher& matcher );
 
+    // Launch a worker immediately, or queue it (interrupting the current one)
+    // if a search is already running, so the calling (main) thread never blocks
+    // waiting for cancellation. Searches stay serialized: only one worker runs
+    // at a time, keeping match-limit state access single-threaded.
+    void startOrQueue( std::function<void()> launch );
+    void launchForward( FilePosition start_position, Selection selection,
+                        QuickFindMatcher matcher );
+    void launchBackward( FilePosition start_position, Selection selection,
+                         QuickFindMatcher matcher );
+
+    std::function<void()> pendingLaunch_;
     AtomicFlag interruptRequested_;
     QFuture<Portion> operationFuture_;
     QFutureWatcher<Portion> operationWatcher_;

@@ -73,6 +73,26 @@ bool QuickFindMatcher::isLineMatchingBackward( const QString& line, LineColumn c
     if ( !isActive_ )
         return false;
 
+    // Fast path for literal searches: a single reverse scan, no per-match
+    // objects. Semantics match the regex path below (last match whose end
+    // column is <= the requested column; whole line when column < 0).
+    if ( isPlainText_ ) {
+        const auto length = plainText_.size();
+        const auto position = column.get();
+        if ( position >= 0 && position < length ) {
+            return false;
+        }
+        const auto from = ( position >= 0 ) ? ( position - length ) : position;
+
+        const auto index = line.lastIndexOf( plainText_, from, caseSensitivity_ );
+        if ( index >= 0 ) {
+            lastMatchStart_ = LineColumn{ index };
+            lastMatchEnd_ = LineColumn{ index + length - 1 };
+            return true;
+        }
+        return false;
+    }
+
     QRegularExpressionMatchIterator matches = regexp_.globalMatch( line );
     QRegularExpressionMatch lastMatch;
     while ( matches.hasNext() ) {
@@ -112,6 +132,11 @@ void QuickFindPattern::changeSearchPattern( const QString& pattern, bool isRegex
         break;
     }
 
+    // A literal search when the config forces fixed strings, or when the caller
+    // did not request regex. The unescaped pattern is kept for the fast path.
+    isPlainText_ = ( searchType != SearchRegexpType::ExtendedRegexp ) || !isRegex;
+    plainText_ = pattern;
+
     regexp_.setPattern( searchType == SearchRegexpType::ExtendedRegexp
                             ? pattern_
                             : QRegularExpression::escape( pattern_ ) );
@@ -131,19 +156,19 @@ void QuickFindPattern::changeSearchPattern( const QString& pattern, bool ignoreC
     if ( ignoreCase )
         options |= QRegularExpression::CaseInsensitiveOption;
 
+    caseSensitivity_ = ignoreCase ? Qt::CaseInsensitive : Qt::CaseSensitive;
+
     regexp_.setPatternOptions( options );
     changeSearchPattern( pattern, isRegex );
 }
 
-bool QuickFindPattern::matchLine( const QString& line,
+bool QuickFindPattern::matchLine( const QString& line, const QColor& backColor,
                                   klogg::vector<HighlightedMatch>& matches ) const
 {
     matches.clear();
 
     if ( active_ ) {
         QRegularExpressionMatchIterator matchIterator = regexp_.globalMatch( line );
-        const auto& config = Configuration::get();
-        const auto backColor = config.qfBackColor();
         while ( matchIterator.hasNext() ) {
             QRegularExpressionMatch match = matchIterator.next();
             matches.emplace_back( LineColumn{ match.capturedStart() },
@@ -156,5 +181,8 @@ bool QuickFindPattern::matchLine( const QString& line,
 
 QuickFindMatcher QuickFindPattern::getMatcher() const
 {
+    if ( isPlainText_ && !plainText_.isEmpty() ) {
+        return QuickFindMatcher( active_, regexp_, plainText_, caseSensitivity_ );
+    }
     return QuickFindMatcher( active_, regexp_ );
 }

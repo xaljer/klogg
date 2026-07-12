@@ -30,6 +30,7 @@ add_library(
   ${CMAKE_CURRENT_SOURCE_DIR}/include/overviewwidget.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/qfnotifications.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfind.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindengine.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindmux.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindpattern.h
   ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindwidget.h
@@ -82,6 +83,7 @@ add_library(
   ${CMAKE_CURRENT_SOURCE_DIR}/src/overview.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/overviewwidget.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfind.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindengine.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindmux.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindpattern.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindwidget.cpp

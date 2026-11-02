@@ -31,7 +31,7 @@ through long and complex log files. It is designed with programmers and
 system administrators in mind and can be seen as a graphical, interactive
 combination of grep, less, and tail.
 
-![Klogg main window](website/static/screenshots/mainwindow.png)
+![Klogg main window](docs/architecture/mockup/screenshots/mainwindow.png)
 
 Please refer to the
 [documentation](DOCUMENTATION.md)

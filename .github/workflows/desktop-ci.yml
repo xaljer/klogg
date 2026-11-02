@@ -1,0 +1,351 @@
+name: "Web and Electron CI"
+
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ '**' ]
+  workflow_dispatch:
+
+jobs:
+  engine-tests:
+    name: Engine unit tests (Qt-free)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Deliberately no Qt packages: this job proves the engine and its suites
+      # build and run without Qt, which is the direction the Qt shell is leaving.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build python3 python-is-python3 \
+            libboost-dev libicu-dev libssl-dev libcurl4-openssl-dev \
+            ragel pkg-config zlib1g-dev
+
+      - uses: actions/cache@v4
+        with:
+          path: .cpm_cache
+          key: cpm-qt-free-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', '3rdparty/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-qt-free-${{ runner.os }}-
+
+      - name: Configure Qt-free tree
+        run: >
+          cmake -S . -B out/qt-free -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DKLOGG_BUILD_SERVER_ONLY=ON
+          -DKLOGG_BUILD_TESTS=ON
+          -DBUILD_TESTING=ON
+          -DKLOGG_USE_LTO=OFF
+          -DKLOGG_USE_HYPERSCAN=OFF
+          -DKLOGG_USE_VECTORSCAN=OFF
+          -DKLOGG_USE_SENTRY=OFF
+          -DKLOGG_USE_PERFETTO=OFF
+          -DCPM_SOURCE_CACHE=${{ github.workspace }}/.cpm_cache
+
+      - name: Build Qt-free engine and tests
+        shell: bash
+        # -k 0: keep going after a failed TU so one run reports every error
+        run: |
+          set -o pipefail
+          cmake --build out/qt-free --target ci_build --parallel 2 -- -k 0 2>&1 | tee out/qt-free/build.log
+
+      - name: Run Qt-free tests
+        shell: bash
+        run: |
+          set -o pipefail
+          # Same filter as the composite actions: CPM dependencies register
+          # their own ctest entries, which CI does not build.
+          ctest --test-dir out/qt-free \
+                -R "^(platform_tests|render_tests|core_link_probe|api_link_probe|klogg_[a-z0-9_]*)$" \
+                --no-tests=error --output-on-failure 2>&1 | tee out/qt-free/test.log
+
+      # Job logs need repo admin rights; these publish the tail as check runs,
+      # which are readable without one.
+      - name: Publish build log tail
+        if: failure()
+        uses: ./build/ci/actions/publish-log-tail
+        with:
+          log-file: out/qt-free/build.log
+          title: qt-free build
+
+      - name: Publish test log tail
+        if: failure()
+        uses: ./build/ci/actions/publish-log-tail
+        with:
+          log-file: out/qt-free/test.log
+          title: qt-free tests
+
+  # Packaging for Windows. The Linux AppImage job below cannot be folded into
+  # this matrix: `container` is a job-level key and Windows runners cannot run
+  # containerised jobs. To add arm64 later, add a matrix entry with a
+  # windows-11-arm runner and pass --arm64 to the dist script.
+  electron-windows:
+    name: Electron Windows (${{ matrix.config.arch }})
+    runs-on: ${{ matrix.config.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - arch: x64
+            runner: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            src/shell/web/package-lock.json
+            src/shell/electron/package-lock.json
+
+      - uses: ./build/ci/actions/klogg-version
+
+      - name: Enable MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build Web UI
+        run: |
+          npm ci
+          npm run build
+        working-directory: src/shell/web
+
+      - name: Type-check Web UI
+        run: npm run check
+        working-directory: src/shell/web
+
+      - name: Run Web unit tests
+        run: npm test
+        working-directory: src/shell/web
+
+      - uses: actions/cache@v4
+        with:
+          path: .cpm_cache
+          key: cpm-desktop-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', '3rdparty/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-desktop-${{ runner.os }}-
+
+      - name: Configure Qt-free server
+        run: >
+          cmake -S . -B out/server -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DKLOGG_BUILD_SERVER_ONLY=ON
+          -DKLOGG_BUILD_TESTS=OFF
+          -DBUILD_TESTING=OFF
+          -DKLOGG_USE_LTO=OFF
+          -DKLOGG_USE_HYPERSCAN=OFF
+          -DKLOGG_USE_VECTORSCAN=OFF
+          -DKLOGG_USE_SENTRY=OFF
+          -DCPM_SOURCE_CACHE=${{ github.workspace }}/.cpm_cache
+
+      - name: Build Qt-free server
+        run: cmake --build out/server --target klogg_server --parallel 2
+
+      - name: Web live-growth and filtered-scroll tests
+        run: >
+          npx playwright test --reporter=list
+          -g "growing file extends|filtered projection keeps|truncating the file"
+        working-directory: src/shell/web
+        env:
+          PLAYWRIGHT_CHANNEL: msedge
+          KLOGG_SERVER_BIN: ${{ github.workspace }}/out/server/output/klogg_server.exe
+
+      - name: Install desktop dependencies
+        run: npm ci
+        working-directory: src/shell/electron
+
+      - name: Prepare Electron resources
+        run: npm run build:resources
+        working-directory: src/shell/electron
+        env:
+          KLOGG_SERVER_BIN: ${{ github.workspace }}/out/server/output/klogg_server.exe
+
+      - name: Verify packaged resources
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "out\web\index.html")) { throw "missing out\web\index.html" }
+          $required = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'tbb12.dll')
+          foreach ($name in $required) {
+            if (-not (Test-Path "out\electron\resources\server\$name")) {
+              throw "missing out\electron\resources\server\$name"
+            }
+          }
+
+      - name: Electron app tests
+        run: npm test
+        working-directory: src/shell/electron
+        env:
+          KLOGG_SERVER_BIN: ${{ github.workspace }}/out/electron/resources/server/klogg_server.exe
+
+      # The installer version comes from build/version.cmake like everything
+      # else; KLOGG_VERSION carries a commit suffix that npm's semver rejects.
+      - name: Stamp package version
+        shell: bash
+        working-directory: src/shell/electron
+        run: npm pkg set "version=${KLOGG_ELECTRON_VERSION%%-*}"
+
+      - name: Build Windows packages
+        run: npm run dist
+        working-directory: src/shell/electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          ELECTRON_MIRROR: "https://cdn.npmmirror.com/binaries/electron/"
+          ELECTRON_BUILDER_BINARIES_MIRROR: "https://cdn.npmmirror.com/binaries/electron-builder-binaries/"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: klogg-electron-installer-${{ matrix.config.arch }}
+          path: |
+            out/release/electron/klogg-*-setup.exe
+            out/release/electron/klogg-*-setup.exe.blockmap
+            out/release/electron/klogg-*-win.zip
+          if-no-files-found: error
+
+  # Two glibc baselines from one job: 22.04 for older distributions, 26.04 for
+  # current ones. Container images instead of Dockerfiles because this path only
+  # needs a compiler, cmake and node - no Qt.
+  electron-appimage:
+    name: Electron AppImage (${{ matrix.distro }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: jammy
+            image: ubuntu:22.04
+          - distro: "2604"
+            image: ubuntu:26.04
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      # The base image has no git, so checkout needs these first.
+      - name: Install git
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git
+
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get install -y --no-install-recommends \
+            curl cmake ninja-build g++ make pkg-config xz-utils file
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            src/shell/web/package-lock.json
+            src/shell/electron/package-lock.json
+
+      - uses: ./build/ci/actions/klogg-version
+
+      - name: Build Web UI
+        run: |
+          npm ci
+          npm run build
+        working-directory: src/shell/web
+
+      - uses: actions/cache@v4
+        with:
+          path: .cpm_cache
+          key: cpm-electron-${{ matrix.distro }}-${{ hashFiles('CMakeLists.txt', '3rdparty/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-electron-${{ matrix.distro }}-
+
+      - name: Configure Qt-free server
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake -S . -B out/server -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DKLOGG_BUILD_SERVER_ONLY=ON \
+            -DKLOGG_BUILD_TESTS=OFF \
+            -DBUILD_TESTING=OFF \
+            -DKLOGG_USE_LTO=OFF \
+            -DKLOGG_USE_HYPERSCAN=OFF \
+            -DKLOGG_USE_VECTORSCAN=OFF \
+            -DKLOGG_USE_SENTRY=OFF \
+            -DCPM_SOURCE_CACHE=${{ github.workspace }}/.cpm_cache 2>&1 | tee server.log
+
+      - name: Build Qt-free server
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build out/server --target klogg_server --parallel 2 2>&1 | tee -a server.log
+
+      - name: Install desktop dependencies
+        run: npm ci
+        working-directory: src/shell/electron
+
+      - name: Electron unit tests
+        shell: bash
+        working-directory: src/shell/electron
+        env:
+          KLOGG_SERVER_BIN: ${{ github.workspace }}/out/server/output/klogg_server
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$GITHUB_WORKSPACE/test.log"
+
+      - name: Prepare Electron resources
+        run: npm run build:resources
+        working-directory: src/shell/electron
+        env:
+          KLOGG_SERVER_BIN: ${{ github.workspace }}/out/server/output/klogg_server
+
+      # The prerelease suffix (commit sha) is valid semver and ends up in the
+      # AppImage file name; the AppImage itself carries the plain version string.
+      - name: Stamp package version
+        shell: bash
+        working-directory: src/shell/electron
+        run: npm pkg set "version=$KLOGG_ELECTRON_VERSION"
+
+      - name: Build AppImage
+        working-directory: src/shell/electron
+        env:
+          ELECTRON_MIRROR: "https://cdn.npmmirror.com/binaries/electron/"
+          ELECTRON_BUILDER_BINARIES_MIRROR: "https://cdn.npmmirror.com/binaries/electron-builder-binaries/"
+        run: |
+          set -o pipefail
+          npm run build:resources
+          npx electron-builder --config electron-builder.yml --linux AppImage --x64 \
+            --config.artifactName='klogg-electron-${version}-${{ matrix.distro }}-x86_64.${ext}' \
+            2>&1 | tee appimage.log
+
+      - name: Publish test log tail
+        if: failure()
+        uses: ./build/ci/actions/publish-log-tail
+        with:
+          log-file: test.log
+          title: electron appimage (${{ matrix.distro }}) tests
+
+      - name: Publish server build log tail
+        if: failure()
+        uses: ./build/ci/actions/publish-log-tail
+        with:
+          log-file: server.log
+          title: electron appimage (${{ matrix.distro }}) server
+
+      - name: Publish appimage log tail
+        if: failure()
+        uses: ./build/ci/actions/publish-log-tail
+        with:
+          log-file: appimage.log
+          title: electron appimage (${{ matrix.distro }}) package
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: klogg-electron-appimage-${{ matrix.distro }}
+          path: out/release/electron/*.AppImage
+          if-no-files-found: error

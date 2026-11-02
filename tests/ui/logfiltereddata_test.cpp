@@ -19,14 +19,18 @@
 
 #include <catch2/catch.hpp>
 
-#include <QSignalSpy>
 #include <QTemporaryFile>
+#include <QSignalSpy>
 #include <QTest>
 #include <QTimer>
 #include <qglobal.h>
 
+#include <tuple>
+#include <vector>
+
 #include "configuration.h"
 #include "log.h"
+#include "log_qt.h"
 #include "test_utils.h"
 
 #include "logdata.h"
@@ -54,22 +58,27 @@ bool generateDataFiles( QTemporaryFile& file )
     return true;
 }
 
+using SearchProgressCall = std::tuple<LinesCount, int, LineNumber>;
+
 void runSearch( LogFilteredData* filtered_data, const QString& regexp,
-                SafeQSignalSpy& searchProgressSpy )
+                std::vector<SearchProgressCall>& searchProgressCalls )
 {
-    filtered_data->runSearch( RegularExpressionPattern( regexp ) );
+    filtered_data->runSearch( RegularExpressionPattern( regexp.toStdString() ) );
 
     int progress = 0;
-    do {
-        const bool ok = searchProgressSpy.safeWait( 15000 );
+    while ( progress < 100 ) {
+        const auto previousCount = searchProgressCalls.size();
+        const bool ok = waitUiState(
+            [ &searchProgressCalls, previousCount ] {
+                return searchProgressCalls.size() > previousCount;
+            },
+            15000 );
         if ( !ok ) {
             filtered_data->interruptSearch();
         }
         REQUIRE( ok );
-
-        const QList<QVariant> progressArgs = searchProgressSpy.last();
-        progress = progressArgs.at( 1 ).toInt();
-    } while ( progress < 100 );
+        progress = std::get<1>( searchProgressCalls.back() );
+    }
 }
 
 } // namespace
@@ -80,7 +89,7 @@ using LineType = LogFilteredData::LineType;
 
 static LogFilteredData::LineTypeFlags toFlags( LogFilteredData::LineType type )
 {
-    return static_cast<LineTypeFlags>( static_cast<LineType::Int>( type ) );
+    return type.flags();
 }
 
 struct LogDataLoader {
@@ -91,10 +100,14 @@ struct LogDataLoader {
         LOG_INFO << "Test run " << counter;
 
         REQUIRE( generateDataFiles( file ) );
-        SafeQSignalSpy loadEndSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
 
-        log_data.attachFile( file.fileName() );
-        REQUIRE( loadEndSpy.safeWait( 15000 ) );
+        bool loadFinished = false;
+        const auto listenerId = log_data.addLoadingFinishedListener(
+            [ &loadFinished ]( LoadingStatus ) { loadFinished = true; } );
+
+        log_data.attachFile( file.fileName().toStdString() );
+        REQUIRE( waitUiState( [ &loadFinished ] { return loadFinished; }, 15000 ) );
+        log_data.removeLoadingFinishedListener( listenerId );
     }
 
     ~LogDataLoader()
@@ -103,7 +116,7 @@ struct LogDataLoader {
     }
 
     QTemporaryFile file{ "filtered_test_XXXXXX" };
-    LogData log_data;
+    LogData log_data{ testPostTarget() };
 };
 
 SCENARIO( "marks in filtered log data", "[logdata]" )
@@ -223,14 +236,17 @@ SCENARIO( "marks in filtered log data", "[logdata]" )
 SCENARIO( "search for regex", "[logdata]" )
 {
     QTemporaryFile file{ "filtered_test_XXXXXX" };
-    LogData log_data;
+    LogData log_data{ testPostTarget() };
 
     GIVEN( "loaded log data" )
     {
         REQUIRE( generateDataFiles( file ) );
-        SafeQSignalSpy loadEndSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
-        log_data.attachFile( file.fileName() );
-        REQUIRE( loadEndSpy.safeWait( 15000 ) );
+        bool loadFinished = false;
+        const auto listenerId = log_data.addLoadingFinishedListener(
+            [ &loadFinished ]( LoadingStatus ) { loadFinished = true; } );
+        log_data.attachFile( file.fileName().toStdString() );
+        REQUIRE( waitUiState( [ &loadFinished ] { return loadFinished; }, 15000 ) );
+        log_data.removeLoadingFinishedListener( listenerId );
 
         auto filtered_data = log_data.getNewFilteredData();
 
@@ -246,22 +262,26 @@ SCENARIO( "search for regex", "[logdata]" )
             auto filtered_lines = filtered_data->getNbLine();
             REQUIRE( filtered_lines.get() == 0 );
 
-            SafeQSignalSpy searchProgressSpy{ filtered_data.get(),
-                                              &LogFilteredData::searchProgressed };
+            std::vector<SearchProgressCall> searchProgressCalls;
+            filtered_data->addMatchesSearchProgressedListener(
+                [ &searchProgressCalls ]( LinesCount nbMatches, int progress,
+                                          LineNumber initialLine ) {
+                    searchProgressCalls.emplace_back( nbMatches, progress, initialLine );
+                } );
 
-            runSearch( filtered_data.get(), "this is line [0-9]{5}9", searchProgressSpy );
+            runSearch( filtered_data.get(), "this is line [0-9]{5}9", searchProgressCalls );
 
             THEN( "Matched lines are in data" )
             {
-                QList<QVariant> progressArgs = searchProgressSpy.last();
-                REQUIRE( qvariant_cast<LinesCount>( progressArgs.at( 0 ) ) == 50_lcount );
+                const auto& progressArgs = searchProgressCalls.back();
+                REQUIRE( std::get<0>( progressArgs ) == 50_lcount );
 
                 const auto matches_count = filtered_data->getNbMatches();
                 REQUIRE( matches_count == 50_lcount );
 
                 const auto lines = filtered_data->getExpandedLines( 0_lnum, matches_count );
                 for ( const auto& l : lines ) {
-                    REQUIRE( l.endsWith( '9' ) );
+                    REQUIRE( l.back() == '9' );
                 }
             }
         }
@@ -271,14 +291,17 @@ SCENARIO( "search for regex", "[logdata]" )
 SCENARIO( "marks and matches in filtered log data", "[logdata]" )
 {
     QTemporaryFile file{ "filtered_test_XXXXXX" };
-    LogData log_data;
+    LogData log_data{ testPostTarget() };
 
     GIVEN( "loaded log data" )
     {
         REQUIRE( generateDataFiles( file ) );
-        SafeQSignalSpy loadEndSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
-        log_data.attachFile( file.fileName() );
-        REQUIRE( loadEndSpy.safeWait( 15000 ) );
+        bool loadFinished = false;
+        const auto listenerId = log_data.addLoadingFinishedListener(
+            [ &loadFinished ]( LoadingStatus ) { loadFinished = true; } );
+        log_data.attachFile( file.fileName().toStdString() );
+        REQUIRE( waitUiState( [ &loadFinished ] { return loadFinished; }, 15000 ) );
+        log_data.removeLoadingFinishedListener( listenerId );
 
         auto filtered_data = log_data.getNewFilteredData();
 
@@ -291,15 +314,19 @@ SCENARIO( "marks and matches in filtered log data", "[logdata]" )
             auto filtered_lines = filtered_data->getNbLine();
             REQUIRE( filtered_lines.get() == 0 );
 
-            SafeQSignalSpy searchProgressSpy{ filtered_data.get(),
-                                              &LogFilteredData::searchProgressed };
+            std::vector<SearchProgressCall> searchProgressCalls;
+            filtered_data->addMatchesSearchProgressedListener(
+                [ &searchProgressCalls ]( LinesCount nbMatches, int progress,
+                                          LineNumber initialLine ) {
+                    searchProgressCalls.emplace_back( nbMatches, progress, initialLine );
+                } );
 
-            runSearch( filtered_data.get(), "this is line [0-9]{5}9", searchProgressSpy );
+            runSearch( filtered_data.get(), "this is line [0-9]{5}9", searchProgressCalls );
 
             AND_WHEN( "Add marks at matched line" )
             {
                 const auto& firstMatchedLine = filtered_data->getLineString( 0_lnum );
-                REQUIRE( firstMatchedLine.right( 2 ).toStdString() == "09" );
+                REQUIRE( firstMatchedLine.substr( firstMatchedLine.size() - 2 ) == "09" );
 
                 filtered_data->addMark( 9_lnum );
 
@@ -476,7 +503,7 @@ SCENARIO( "marks and matches in filtered log data", "[logdata]" )
                     auto original_line = filtered_data->getMatchingLineNumber( 1_lnum );
 
                     const auto& firstMatchedLine = filtered_data->getLineString( 1_lnum );
-                    REQUIRE( firstMatchedLine.right( 2 ).toStdString() == "09" );
+                    REQUIRE( firstMatchedLine.substr( firstMatchedLine.size() - 2 ) == "09" );
 
                     THEN( "Original line is on match" )
                     {

@@ -1,0 +1,21 @@
+name: "Build and test in container"
+description: "Generate the build files, build the code and publish the log tail when it fails"
+runs:
+  using: "composite"
+  steps:
+    - name: configure
+      shell: sh
+      run: |
+        docker run --env KLOGG_VERSION=$KLOGG_VERSION --env KLOGG_BUILD_ROOT=$KLOGG_BUILD_ROOT --env KLOGG_CMAKE_OPTS="$KLOGG_CMAKE_OPTS" -v "$KLOGG_WORKSPACE":/usr/local ${{ matrix.config.container }} /bin/bash -c "mkdir -p /usr/local/$KLOGG_BUILD_ROOT && set -o pipefail && cmake -B /usr/local/$KLOGG_BUILD_ROOT $KLOGG_CMAKE_OPTS -DCPM_SOURCE_CACHE=/usr/local/cpm_cache /usr/local 2>&1 | tee /usr/local/$KLOGG_BUILD_ROOT/build.log"
+
+    - name: build
+      shell: sh
+      run: |
+        docker run --env KLOGG_BUILD_ROOT=$KLOGG_BUILD_ROOT -v "$KLOGG_WORKSPACE":/usr/local ${{ matrix.config.container }} /bin/bash -c "set -o pipefail && cmake --build /usr/local/$KLOGG_BUILD_ROOT --target ci_build -- -k 0 2>&1 | tee -a /usr/local/$KLOGG_BUILD_ROOT/build.log"
+
+    - name: Publish build log tail
+      if: failure()
+      uses: ./build/ci/actions/publish-log-tail
+      with:
+        log-file: build.log
+        title: build (${{ matrix.config.artifacts_id }})

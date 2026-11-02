@@ -1,0 +1,18 @@
+name: "Run tests in container"
+description: "Run the project's ctest suites in the container and publish the log tail when they fail"
+runs:
+  using: "composite"
+  steps:
+    - name: test
+      shell: sh
+      run: |
+        # Same test filter as agent-run-tests: CPM dependencies register their own
+        # ctest entries, which CI does not build.
+        docker run --env KLOGG_BUILD_ROOT=$KLOGG_BUILD_ROOT -v "$KLOGG_WORKSPACE":/usr/local ${{ matrix.config.container }} /bin/bash -c "cd /usr/local/$KLOGG_BUILD_ROOT && set -o pipefail && ctest -R '^(platform_tests|render_tests|core_link_probe|api_link_probe|klogg_[a-z0-9_]*)$' --no-tests=error --output-on-failure 2>&1 | tee test.log"
+
+    - name: Publish test log tail
+      if: failure()
+      uses: ./build/ci/actions/publish-log-tail
+      with:
+        log-file: test.log
+        title: tests (${{ matrix.config.artifacts_id }})

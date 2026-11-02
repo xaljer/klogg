@@ -1,0 +1,23 @@
+{
+  "name": "klogg-electron",
+  "version": "26.11.28",
+  "private": true,
+  "description": "Windows desktop shell for the klogg Web UI",
+  "author": "Anton Filimonov and klogg contributors",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "build:resources": "node scripts/prepare-resources.cjs",
+    "pack": "npm run build:resources && electron-builder --config electron-builder.yml --win dir --x64",
+    "pack:linux": "npm run build:resources && electron-builder --config electron-builder.yml --linux dir --x64",
+    "dist": "npm run build:resources && electron-builder --config electron-builder.yml --win nsis zip --x64",
+    "dist:zip": "npm run build:resources && electron-builder --config electron-builder.yml --win zip --x64",
+    "dist:linux": "npm run build:resources && electron-builder --config electron-builder.yml --linux AppImage --x64"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  },
+  "license": "GPL-3.0-only"
+}

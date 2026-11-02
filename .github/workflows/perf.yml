@@ -1,0 +1,67 @@
+name: "Performance"
+
+# Advisory benchmark run: shared runners are too noisy to gate pull requests on,
+# so this is a scheduled/manual run whose output is kept as an artifact for
+# trend watching. Add a threshold step here once it runs on stable hardware.
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  benchmarks:
+    name: Engine benchmarks (Qt6, Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential python3 python-is-python3 \
+            qt6-base-dev qt6-5compat-dev qt6-translations-l10n \
+            qt6-tools-dev-tools qt6-base-dev-tools qt6-tools-dev \
+            libboost-dev libicu-dev libssl-dev libcurl4-openssl-dev \
+            ragel ninja-build zlib1g-dev pkg-config
+
+      - uses: actions/cache@v4
+        with:
+          path: .cpm_cache
+          key: cpm-bench-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', '3rdparty/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-bench-${{ runner.os }}-
+
+      - name: Configure benchmarks
+        run: >
+          cmake -S . -B out/bench -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DKLOGG_BUILD_TESTS=ON
+          -DKLOGG_USE_LTO=OFF
+          -DKLOGG_USE_HYPERSCAN=OFF
+          -DKLOGG_USE_VECTORSCAN=OFF
+          -DKLOGG_USE_SENTRY=OFF
+          -DKLOGG_USE_PERFETTO=OFF
+          -DCPM_SOURCE_CACHE=${{ github.workspace }}/.cpm_cache
+
+      - name: Build benchmarks
+        run: >
+          cmake --build out/bench --parallel 2
+          --target klogg_engine_bench ansi_parser_bench quickfind_bench
+
+      - name: Run benchmarks
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          mkdir -p bench-results
+          for bench in klogg_engine_bench ansi_parser_bench quickfind_bench; do
+            echo "=== $bench ===" | tee -a bench-results/all.txt
+            "./out/bench/output/$bench" 2>&1 | tee -a bench-results/all.txt || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: bench-results/all.txt
+          if-no-files-found: error

@@ -47,18 +47,31 @@ Klogg 是一个高性能日志查看器，基于 C++20 和 Qt5/Qt6。本文件�
 
 ### 构建命令
 
+项目使用**同一棵构建树** `build/`（Ninja，RelWithDebInfo），脚本都在仓库根（Windows/MSVC）：
+
 ```bash
-# 始终使用项目构建脚本
-& .\build_release.cmd
+.\build_configure.cmd   # 首次配置（Qt 路径、选项、依赖缓存）
+.\build_core.cmd        # 只编 core（引擎 + Core API）+ 零 Qt server 及其测试，不碰 Qt GUI
+.\build.cmd             # 编 Qt GUI + 零 Qt server + 全部测试套件
+.\test.cmd              # 跑全部测试套件（offscreen）
+.\build_core_clang.cmd  # 用 clang-cl 编 core（需装 LLVM；"去 MSVC" 第一半验证）
 ```
 
-本项目支持 Windows / macOS / Linux 多平台构建。本地可能无法全部验证，但编码时应注意平台兼容性——平台差异抽象到独立文件，避免 `#ifdef` 散落。
+- **编译器缓存**：装了 `sccache`/`ccache` 会自动启用（`KLOGG_USE_COMPILER_CACHE=OFF` 关闭）。
+- **PCH**：Qt UI 用预编译头（`KLOGG_USE_PCH=OFF` 关闭对比）。
+
+- `src/core/` 零 Qt（引擎、共享状态、Core API），暴露 `core` target；分层由依赖图表达，增量自动：改 core 只重编 core、GUI 仅重链。
+- 产物在 `build/output`。
+- **CPM 依赖缓存在 `.cpm_cache/`（已 gitignore，但务必固定保留）**：网络不佳时离线配置/重配依赖它；清理构建目录时不要删它。首次全新拉取依赖后请勿移动该目录。
+- 本项目支持 Windows / macOS / Linux 多平台构建。本地可能无法全部验证，但编码时应注意平台兼容性——平台差异抽象到独立文件，避免 `#ifdef` 散落。
 
 ### CMake 选项
 
 - `-DKLOGG_USE_HYPERSCAN=OFF` - 用 Qt 正则替代 Hyperscan
 - `-DKLOGG_USE_SENTRY=ON` - 启用崩溃报告
-- `-DBUILD_TESTS=OFF` - 禁用测试构建
+- `-DKLOGG_BUILD_TESTS=OFF` - 禁用测试构建
+- `-DKLOGG_BUILD_SERVER_ONLY=ON` - 只构建零 Qt 的 `klogg_server`（不查 Qt、不带 GUI/测试）
+- `-DKLOGG_USE_PERFETTO=ON` - 在 api/UI 埋 Perfetto 追踪
 
 ---
 
@@ -67,21 +80,36 @@ Klogg 是一个高性能日志查看器，基于 C++20 和 Qt5/Qt6。本文件�
 ### 运行全部测试
 
 ```bash
-cd build_root
-ctest --build-config RelWithDebInfo --verbose
+.\test.cmd
 ```
 
 ### 运行单个测试 (Catch2)
 
 ```bash
-./tests/unit/klogg_test "[test_name]"
+build\output\klogg_api_tests.exe "[tag]"   # 各套件为 build\output\*_tests.exe
 ```
 
 ### 测试位置
 
-- 单元测试: `tests/unit/`
+- 模块测试（新架构，与代码同处，独立 exe）: `src/<module>/tests/`（如 `src/core/api/tests/` → `klogg_api_tests`）
+- 单元测试（旧布局）: `tests/unit/`
 - UI 测试: `tests/ui/`
 - 测试辅助: `tests/helpers/`
+- 基准测试: `tests/bench/`
+
+### UI 截图场景 (tests/ui/screenshot_test.cpp)
+
+- 带 `[screenshot]` tag，仅当 `KLOGG_SCREENSHOT_DIR` 指向输出目录时执行，否则 QSKIP：
+  `QT_QPA_PLATFORM=offscreen KLOGG_SCREENSHOT_DIR=<dir> build\output\klogg_itests.exe "[screenshot]"`
+- Windows offscreen 平台拿不到系统字体（文本全是方框）；qtests_main 已内置
+  `QT_QPA_FONTDIR=C:\Windows\Fonts` 兜底（可用同名环境变量覆盖）
+
+### 性能回归场景 (tests/ui/perf_repro_test.cpp)
+
+- 带 `[perf_repro]` tag，仅当 `KLOGG_PERF_REPRO_FILE` 指向大日志文件时执行，否则 QSKIP：
+  `QT_QPA_PLATFORM=offscreen KLOGG_PERFETTO_TRACE=<path>.pftrace KLOGG_PERF_REPRO_FILE=<big.log> build\output\klogg_itests.exe "[perf_repro]"`
+- 相位 marker（resize/search/tab）打在 "ui" category 上，配 trace_processor_shell 按窗口切片；
+  详见 docs/architecture/perf-stutter-notes.md
 
 ---
 
@@ -203,17 +231,50 @@ feat: add new filter option
 
 ```
 src/
-├── app/           - 程序入口
+├── core/          - 零 Qt 核心：引擎 + 共享状态 + Core API
+│   ├── api/       - Core API 接口层
+│   ├── ansi/      - ANSI 转义解析
+│   ├── filewatch/ - 文件监控
+│   ├── logdata/   - 日志数据结构
+│   ├── regex/     - 正则表达式
+│   ├── render/    - 渲染核心（折行/高亮合成/布局，零 Qt）
+│   └── state/     - 共享状态（高亮/过滤器/搜索历史/最近文件）
+├── app/           - 程序入口（Qt）
 ├── crash_handler/ - 崩溃报告
-├── filewatch/     - 文件监控
 ├── klogg_version/ - 版本信息
-├── logdata/       - 日志数据结构
 ├── logging/       - 日志基础设施
-├── regex/         - 正则表达式
-├── settings/      - 配置
+├── platform/      - 平台机制（settings/paths/userdata/log，零 Qt）
+├── server/        - 零 Qt HTTP/SSE 服务（klogg_server_core + 临时 klogg_server）
+├── settings/      - Qt 配置（Configuration/PersistentInfo）
 ├── ui/            - Qt UI 组件
-└── utils/         - 工具函数
+├── utils/         - 工具函数
+├── web/           - Web UI（Vite + Svelte + xterm；spike/ 是 P0 验证）
+└── versioncheck/  - 版本检查
 ```
+
+---
+
+## 第三方补丁
+
+CPM 拉取的第三方库需要打补丁时，把改好的完整源文件放在
+`3rdparty/patches/<package>-<version>/` 下，并在 `3rdparty/CMakeLists.txt` 对应包的
+`if(<pkg>_ADDED)` 块里用 `configure_file(... COPYONLY)` 在配置期覆盖 `_deps` 中的同名文件。
+包版本由 GIT_TAG 固定，补丁文件不会漂移；升级包版本时必须同步审查补丁。
+
+现有补丁：
+- `efsw-1.4.1/WatcherWin32.cpp` — (1) `DestroyWatch` 不提前释放 OVERLAPPED/通知缓冲区：
+  被取消的 ReadDirectoryChangesW IRP 会异步完成、内核在完成时才写这两个结构，
+  提前释放会让内核写已释放堆；改为把 watch 移入 graveyard，由 watcher 线程从 IOCP
+  收到最终完成包后再释放（同步等待方案会被 I/O 栈中的过滤驱动卡死，故不采用）。
+  **v2（2026-08-29）**：删除 ERROR_NOT_FOUND 立即释放快路径，一律 defer——
+  IRP 已完成但完成包未收割时 CancelIoEx 报 NOT_FOUND，立即释放会让陈旧完成包
+  被误配给复用了同一地址的新 watch（mWatches.find 命中）→ 多 arm 一个 IRP →
+  graveyard 只收一个包即释放 → 第二个 IRP 完成时内核写已释放堆（P0 残留 ~0.3%
+  fastfail 的根因）。defer 使地址在收割前不被复用，陈旧包必命中 graveyard。
+  (2) `WatchCallback` 修复零字节完成（缓冲区溢出）时重复 arm 两次 ReadDirectoryChangesW
+  导致同一 OVERLAPPED 上挂多个 IRP 的问题，每次完成只 re-arm 一次
+- `efsw-1.4.1/FileWatcherWin32.cpp` / `FileWatcherWin32.hpp` — graveyard 集合与收割逻辑；
+  run 循环同时处理失败完成包（取消的 IRP 以 res==FALSE 返回）
 
 ---
 

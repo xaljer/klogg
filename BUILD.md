@@ -51,6 +51,129 @@ If a library can't be found, the one provided by CPM will be used.
 
 ## Building
 
+### Local build scripts (Windows)
+
+The repository ships a small set of wrapper scripts (run them from the repository
+root). They all drive `CMakePresets.json`, and every build tree lands under `out/` (Ninja, `RelWithDebInfo`):
+
+| Script | Purpose |
+|--------|---------|
+| `build\configure.cmd` | Configure the `qt` preset into `out/qt` (Qt path, options, dependency cache). Run once after a clean checkout. |
+| `build\core.cmd` | Build only the Qt-free core (engine + Core API), the HTTP server and their tests. |
+| `build\core-clang.cmd` | Compile that core with clang-cl instead of MSVC (needs LLVM on `PATH`). |
+| `build\all.cmd` | Build the Qt GUI, the HTTP server and all test suites. |
+| `tests\run.cmd` | Generate the test fixtures, then run every test suite (offscreen Qt). |
+| `package_release.cmd` | Assemble a portable release under `release/`. |
+
+**Compiler cache & PCH.** If `sccache` or `ccache` is on `PATH`, CMake uses it as
+the compiler launcher automatically (`-DKLOGG_USE_COMPILER_CACHE=OFF` disables).
+The Qt UI library also uses a precompiled header (`-DKLOGG_USE_PCH=OFF` disables).
+
+**clang-cl.** For the Windows build the compiler can be swapped to clang-cl
+(MSVC ABI, so the msvc Qt packages still link). `build\core-clang.cmd` configures a
+separate `out/clang` tree and builds only the core; it requires LLVM
+(`winget install LLVM.LLVM`).
+
+Binaries land in `out/qt/output`.
+
+**HTTP server (zero Qt).** `klogg_server` is the temporary host of
+`klogg_server_core`, the HTTP/SSE endpoint over the Core API (the product CLI will
+host the same core later). It links no Qt library.
+
+```bash
+# target-only build (MSVC: run from a Developer PowerShell / after vcvars64)
+cmake --build build --target klogg_server klogg_server_tests
+
+out/server/output/klogg_server.exe --port 8080
+out/server/output/klogg_server.exe --port 8080 --token secret --root C:/logs
+out/qt/output/klogg_server_tests.exe          # or: ctest -R klogg_server_tests
+```
+
+- `--port 0` binds an ephemeral port and prints the actual URL.
+- `--listen` defaults to `127.0.0.1`; a non-loopback address requires `--token`.
+- `--root` restricts `file.open` to that directory; `--web-root` serves a built UI.
+- `--cors` allows any origin (development only); `--max-body <bytes>` caps request bodies.
+- The server's third-party code (`cpp-httplib`, `nlohmann/json`, and the
+  `libarchive` + `zlib`/`bzip2`/`liblzma` stack) is fetched by CPM and cached in
+  `.cpm_cache/`; the repository only carries the pinned URLs and the
+  `libarchive` patches under `3rdparty/patches/libarchive-3.7.4/`.
+- The protocol contract is `docs/architecture/web-api.md`.
+
+To configure a server-only tree on a machine without Qt (also how Web E2E CI
+builds it). `cmake --preset server` is the short form; the explicit equivalent is:
+
+```bash
+cmake -S . -B out/server -G Ninja \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DKLOGG_BUILD_SERVER_ONLY=ON \
+  -DKLOGG_BUILD_TESTS=OFF \
+  -DBUILD_TESTING=OFF \
+  -DKLOGG_USE_LTO=OFF \
+  -DKLOGG_USE_HYPERSCAN=OFF \
+  -DKLOGG_USE_VECTORSCAN=OFF \
+  -DKLOGG_USE_SENTRY=OFF
+cmake --build out/server --target klogg_server
+```
+
+`KLOGG_BUILD_SERVER_ONLY` skips the Qt GUI targets and their third-party Qt
+packages. `BUILD_TESTING=OFF` also keeps third-party test dependencies out of the
+configure. The binary is `out/server/output/klogg_server` (`.exe` on Windows).
+
+**Web UI.** `src/shell/web/` is a Vite + Svelte 5 + TypeScript app (xterm viewport). The
+Electron shell and `klogg_server` both load the built UI from `out/web`; nothing reads the
+source tree at runtime.
+
+```bash
+cd src/shell/web
+npm ci
+npm run build        # writes out/web (repo root); required before e2e and packaging
+npm run check        # svelte-check --fail-on-warnings (CI gate for .svelte/.ts/a11y)
+npm test             # unit tests: pure logic and i18n
+npm run test:e2e     # Playwright against a real klogg_server
+npm run dev          # Vite on 127.0.0.1:5173, proxies /api to 127.0.0.1:8080
+```
+
+Serve the built UI and the API from one process:
+
+```bash
+out/server/output/klogg_server.exe --port 8080 --web-root out/web
+# open http://127.0.0.1:8080/
+```
+
+`npm run test:e2e` starts the server itself (`cmake --preset server` builds it) and
+reads:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `KLOGG_SERVER_BIN` | `out/server/output/klogg_server[.exe]` | Server binary under test |
+| `KLOGG_WEB_ROOT` | `out/web` | Built UI served to the browser |
+| `KLOGG_E2E_PORT` | `18080` | Server port |
+| `PLAYWRIGHT_CHANNEL` | unset | `msedge` uses the installed Edge instead of a downloaded Chromium |
+
+Rules:
+
+- `npm run check` must report zero errors and zero warnings. It catches missing imports,
+  wrong event payloads and a11y warnings that the bundler tolerates.
+- `out/web` is the only artifact the server and Electron read. Rebuild it after any source
+  change before e2e or packaging.
+- Unit tests cover pure logic; layout, focus, selection and clipboard behaviour belongs to
+  e2e. E2E runs against the real server with `src/shell/web/e2e/fixtures` as its file root.
+
+The package layout is described in `src/shell/web/README.md`; the HTTP/SSE contract is
+`docs/architecture/web-api.md`; desktop parity is `docs/architecture/web-ui-parity.md`.
+
+**Core / GUI split.** `src/core/` is Qt-free (engine, shared state, the Core API)
+and exposes the `core` target. The dependency graph already encodes the layering,
+so incremental builds are automatic:
+
+- Building `core` after a core change recompiles only the affected core sources
+  and relinks the core static libraries; the Qt GUI is not touched.
+- Building `klogg` afterwards only relinks; no UI translation unit is recompiled.
+
+**Dependency cache.** All third-party sources are cached under `.cpm_cache/`
+(gitignored). Keep this directory: with poor or no network access, configuration
+and rebuilds rely on it. Do not delete or move it after the first fetch.
+
 ### Configuration options
 
 By default Klogg is built without support for reporting crash dumps. This can be enabled via cmake option `-DKLOGG_USE_SENTRY=ON`.
@@ -183,10 +306,38 @@ By default, klogg will rely on cmake to figure out target MacOS version. Usually
 To override default cmake value pass an option `-DKLOGG_OSX_DEPLOYMENT_TARGET=<target>` to cmake during configuration step,
 `<target>` is one of `10.14`, `10.15`, `11`, `12`. Klogg's traget must be greater or equal to target used by Qt libraries.
 
+## Electron Windows package
+
+The Electron shell lives in `src/shell/electron`. It consumes the Web build and the
+Qt-free server binary; it does not build Qt.
+
+```powershell
+cd src/shell/web
+npm ci
+npm run build
+
+cd ../electron
+npm ci
+npm test              # main-process unit tests
+npm run dist          # NSIS installer
+npm run dist:zip      # portable zip
+```
+
+`npm run dist` prepares `out/web` and `out/server/output/klogg_server.exe` as application
+resources, then writes `out/release/electron/klogg-<version>-setup.exe`. `npm run dist:zip`
+adds `klogg-<version>-win.zip`. `npm run pack` stops after
+`out/release/electron/win-unpacked`, which is the fastest loop for manual testing: replace
+`resources/web` there and restart.
+
+See `src/shell/electron/README.md` for server mode and token details, and
+`docs/architecture/electron-packaging.md` for the packaging design.
+
 ## Running tests
 
-Tests are built by default. To turn them off pass `-DBUILD_TESTS:BOOL=OFF` to cmake.
-Tests use catch2 (bundled with klogg sources) and require Qt5Test module. Tests can be run using ctest tool provider by CMake:
+Tests are built by default. To turn them off pass `-DKLOGG_BUILD_TESTS:BOOL=OFF` to cmake.
+Tests use catch2 (bundled with klogg sources) and require Qt5Test module. On Windows the
+wrapper script `tests\run.cmd` runs every suite; tests can also be run using the ctest tool
+provided by CMake:
 
 ```
 cd <path_to_klogg_repository_clone>

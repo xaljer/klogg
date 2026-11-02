@@ -12,8 +12,8 @@ jobs:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/klogg-version
+      - uses: actions/checkout@v4
+      - uses: ./build/ci/actions/klogg-version
 
       - name: Save version 
         run: echo $KLOGG_VERSION > klogg_version.txt
@@ -24,48 +24,62 @@ jobs:
           path: 'klogg_version.txt'
           if-no-files-found: error
 
+  # Fast, focused signal for the Qt-facing part of the Core API: the suite needs
+  # a QGuiApplication host and the Qt settings documents, so it builds on this
+  # line and not on the Qt-free one. The Qt-free engine suites live in
+  # desktop-ci.yml.
+  ApiTests:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    name: API unit tests (Qt)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential python3 python-is-python3 \
+            qt6-base-dev qt6-5compat-dev qt6-translations-l10n \
+            qt6-tools-dev-tools qt6-base-dev-tools qt6-tools-dev \
+            libboost-dev libicu-dev libssl-dev libcurl4-openssl-dev \
+            ragel ninja-build zlib1g-dev pkg-config
+
+      - uses: actions/cache@v4
+        with:
+          path: .cpm_cache
+          key: cpm-api-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', '3rdparty/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-api-${{ runner.os }}-
+
+      - name: Configure API tests
+        run: >
+          cmake -S . -B out/api -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DKLOGG_BUILD_TESTS=ON
+          -DKLOGG_USE_LTO=OFF
+          -DKLOGG_USE_HYPERSCAN=OFF
+          -DKLOGG_USE_VECTORSCAN=OFF
+          -DKLOGG_USE_SENTRY=OFF
+          -DKLOGG_USE_PERFETTO=OFF
+          -DCPM_SOURCE_CACHE=${{ github.workspace }}/.cpm_cache
+
+      - name: Build API unit tests
+        # -k 0: keep going after a failed TU so one run reports every error
+        run: cmake --build out/api --target klogg_api_tests --parallel 2 -- -k 0
+
+      - name: Run API unit tests
+        run: ctest --test-dir out/api -R '^klogg_api_tests$' --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen
+
   Linux:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     strategy:
       fail-fast: false
       matrix:
         config:
-          #- os: oraclelinux
-          #  os_version: 7
-          #  arch: x64
-          #  check_command: yum install -y --setopt tsflags=test /usr/local/klogg*.rpm
-          #  cpack_gen: RPM
-          #  artifacts_id: oracle7
-          #  package_suffix: rpm
-          #  check_container: oraclelinux:7
-          #  container_root: docker/oracle7
-          #  container: variar/klogg_oracle7
-          #  cmake_opts: -DKLOGG_USE_SENTRY=OFF -DKLOGG_USE_LTO=OFF -DKLOGG_USE_HYPERSCAN=OFF
-
-          - os: oraclelinux
-            os_version: 8
-            arch: x64
-            check_command: yum install -y --setopt tsflags=test /usr/local/klogg*.rpm
-            cpack_gen: RPM
-            artifacts_id: oracle
-            package_suffix: rpm
-            check_container: oraclelinux:8
-            container_root: docker/oracle8
-            container: variar/klogg_oracle8
-            cmake_opts: -DCMAKE_BUILD_WITH_INSTALL_RPATH=on -DKLOGG_USE_VECTORSCAN=OFF -DKLOGG_USE_HYPERSCAN=ON -DKLOGG_USE_SENTRY=OFF
-
-          - os: ubuntu_focal
-            os_version: 20.04
-            arch: x64
-            check_command: apt-get update && apt install --dry-run /usr/local/klogg*.deb
-            cpack_gen: DEB
-            artifacts_id: focal
-            package_suffix: deb
-            check_container: ubuntu:20.04
-            container_root: docker/ubuntu20.04
-            container: variar/klogg_ubuntu20.04
-            cmake_opts:
-          
           - os: ubuntu_jammy
             os_version: 22.04
             arch: x64
@@ -74,7 +88,7 @@ jobs:
             artifacts_id: jammy
             package_suffix: deb
             check_container: ubuntu:22.04
-            container_root: docker/ubuntu22.04
+            container_root: build/ci/docker/ubuntu22.04
             container: variar/klogg_ubuntu22.04
             cmake_opts:
 
@@ -86,23 +100,23 @@ jobs:
             artifacts_id: noble
             package_suffix: deb
             check_container: ubuntu:24.04
-            container_root: docker/ubuntu24.04
+            container_root: build/ci/docker/ubuntu24.04
             container: variar/klogg_ubuntu24.04
             cmake_opts:
 
           - os: ubuntu_appimage
-            os_version: 20.04
+            os_version: 24.04
             arch: x64
             artifacts_id: appimage
             package_suffix: AppImage
-            container_root: docker/ubuntu20.04
-            container: variar/klogg_ubuntu20.04
+            container_root: build/ci/docker/ubuntu24.04
+            container: variar/klogg_ubuntu24.04
             cmake_opts:
 
 
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       #- uses: satackey/action-docker-layer-caching@v0.0.11
       #  # Ignore the failure of a step and avoid terminating the job.
@@ -113,11 +127,22 @@ jobs:
           cd ${{ matrix.config.container_root }}
           docker build -t ${{ matrix.config.container }} .
 
-      - uses: ./.github/actions/klogg-version
-      - uses: ./.github/actions/prepare-workspace-env
-      - uses: ./.github/actions/docker-build
-      - uses: ./.github/actions/docker-run-tests
-      - uses: ./.github/actions/docker-package
+      - uses: ./build/ci/actions/klogg-version
+      - uses: ./build/ci/actions/prepare-workspace-env
+
+      # CPM fetches the pinned dependencies into the workspace, which the
+      # container sees as /usr/local/cpm_cache. Cache it on the host so a run
+      # does not refetch everything.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/cpm_cache
+          key: cpm-linux-${{ hashFiles('CMakeLists.txt', '3rdparty/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-linux-
+
+      - uses: ./build/ci/actions/docker-build
+      - uses: ./build/ci/actions/docker-run-tests
+      - uses: ./build/ci/actions/docker-package
           
 # Final upload of all packages
       - uses: actions/upload-artifact@v4
@@ -133,7 +158,10 @@ jobs:
       matrix:
         config:
           - os: macos
-            os_version: 14
+            # macOS 14 images were retired from GitHub Actions on 2026-11-02,
+            # so the job is cancelled at creation with "configuration not
+            # supported". macos-15 is the currently supported arm64 image.
+            os_version: 15
             qt_version: 6.7.3
             qt_arch: clang_64
             qt_modules: qt5compat
@@ -143,11 +171,13 @@ jobs:
 
     runs-on: ${{ matrix.config.os }}-${{ matrix.config.os_version }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Setup Xcode
         shell: sh
-        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+        # Xcode 16.4 is the default toolchain on the macos-15 image (15.2 is not
+        # installed there anymore).
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app
 
 #Install build deps
       - name: Set brew env
@@ -160,12 +190,22 @@ jobs:
         run: |
           brew install ragel
 
-      - uses: ./.github/actions/agent-setup
-      - uses: ./.github/actions/klogg-version
-      - uses: ./.github/actions/prepare-workspace-env
-      - uses: ./.github/actions/agent-build
-      - uses: ./.github/actions/agent-run-tests
-      - uses: ./.github/actions/agent-package-mac
+      - uses: ./build/ci/actions/agent-setup
+      - uses: ./build/ci/actions/klogg-version
+      - uses: ./build/ci/actions/prepare-workspace-env
+
+      # agent-build points CPM at $KLOGG_WORKSPACE/cpm_cache; without this the
+      # configure step refetches every dependency on each run.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/cpm_cache
+          key: cpm-macos-${{ hashFiles('CMakeLists.txt', '3rdparty/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-macos-
+
+      - uses: ./build/ci/actions/agent-build
+      - uses: ./build/ci/actions/agent-run-tests
+      - uses: ./build/ci/actions/agent-package-mac
         with:
           p12-file-base64: ${{ secrets.CODESIGN_BASE64 }}
           p12-password: ${{ secrets.CODESIGN_PASSWORD }}
@@ -195,49 +235,55 @@ jobs:
             cmake_opts:
             artifacts_id: windows-x64-qt6
 
-          - os: windows
-            os_version: 2022
-            qt_version: 5.15.2
-            qt_arch: win32_msvc2019
-            arch: x86
-            cmake_opts:
-            artifacts_id: windows-x86-qt5
-
     runs-on: ${{ matrix.config.os }}-${{ matrix.config.os_version }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
+      # Qt 6.7 dropped the OpenSSL 1.1 backend and only supports OpenSSL 3, so
+      # the runtime DLLs bundled by prepare_release.cmd come from a 3.x build.
       - name: Cache openssl
         id: cache-openssl
         uses: actions/cache@v4
         with:
-          path: ${{ github.workspace }}\openssl-1.1
-          key: OpensslCache-1-1-1w
+          path: ${{ github.workspace }}\openssl-3
+          key: OpensslCache-3-5-9
 
       - name: Download openssl
-        if: ${{ steps.cache-openssl.outputs.cache-hit != 'true' }} 
+        if: ${{ steps.cache-openssl.outputs.cache-hit != 'true' }}
+        shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://www.firedaemon.com/download-firedaemon-openssl-1.1.1-zip" -OutFile openssl.zip
-          7z x openssl.zip 
+          Invoke-WebRequest -Uri "https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.9.zip" -OutFile openssl.zip
+          7z x openssl.zip -oopenssl-3 -y
 
       - name: Set openssl paths
-        shell: sh
+        shell: pwsh
         run: |
-          echo "SSL_DIR=${{ github.workspace }}\openssl-1.1\${{ matrix.config.arch }}\bin" >> $GITHUB_ENV
-          echo "SSL_ARCH=${{ matrix.config.ssl_arch }}" >> $GITHUB_ENV 
+          $dll = Get-ChildItem -Path "${{ github.workspace }}\openssl-3" -Recurse -Filter "libssl-3-x64.dll" | Select-Object -First 1
+          if (-not $dll) { throw "libssl-3-x64.dll not found in the OpenSSL archive" }
+          "SSL_DIR=$($dll.DirectoryName)" >> $env:GITHUB_ENV
+          "SSL_ARCH=${{ matrix.config.ssl_arch }}" >> $env:GITHUB_ENV
 
-      - uses: ./.github/actions/agent-setup
-      - uses: ./.github/actions/klogg-version
-      - uses: ./.github/actions/prepare-workspace-env
-      
+      - uses: ./build/ci/actions/agent-setup
+      - uses: ./build/ci/actions/klogg-version
+      - uses: ./build/ci/actions/prepare-workspace-env
+
+      # agent-build points CPM at $KLOGG_WORKSPACE/cpm_cache; without this the
+      # configure step refetches every dependency on each run.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/cpm_cache
+          key: cpm-windows-${{ hashFiles('CMakeLists.txt', '3rdparty/CMakeLists.txt') }}
+          restore-keys: |
+            cpm-windows-
+
       - name: Prepare dev cmd
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.config.arch }}
 
-      - uses: ./.github/actions/agent-build
-      - uses: ./.github/actions/agent-run-tests
-      - uses: ./.github/actions/agent-package-win
+      - uses: ./build/ci/actions/agent-build
+      - uses: ./build/ci/actions/agent-run-tests
+      - uses: ./build/ci/actions/agent-package-win
         with:
           s3-key-id: ${{ secrets.WIN_CS_KEY_ID }}
           s3-secret: ${{ secrets.WIN_CS_SECRET }}

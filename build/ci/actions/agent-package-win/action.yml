@@ -1,0 +1,60 @@
+name: "Prepare windows packages"
+description: ""
+inputs:
+  s3-key-id:
+    required: true
+  s3-secret:
+    required: true
+  s3-bucket:
+    required: true
+runs:
+  using: "composite"
+  steps:
+    # Container actions do not run on Windows runners, so makensis is invoked
+    # directly. It ships with the runner image; choco covers the case where it
+    # does not.
+    - name: Install NSIS
+      shell: pwsh
+      run: |
+        $makensis = 'C:\Program Files (x86)\NSIS\makensis.exe'
+        if (-not (Test-Path $makensis)) {
+          choco install nsis --no-progress -y
+        }
+        if (-not (Test-Path $makensis)) {
+          throw "makensis not found at $makensis"
+        }
+        "KLOGG_MAKENSIS=$makensis" >> $env:GITHUB_ENV
+
+    - name: Win portable
+      shell: cmd
+      run: |
+        md %KLOGG_WORKSPACE%\out\ci 2>nul
+        build\package\windows\prepare_release.cmd > "%KLOGG_WORKSPACE%\out\ci\package.log" 2>&1
+
+    - name: Win installer
+      shell: pwsh
+      run: |
+        & $env:KLOGG_MAKENSIS `
+            "/DVERSION=$env:KLOGG_VERSION" `
+            "/DPLATFORM=$env:KLOGG_ARCH" `
+            "/DQT_MAJOR=$env:KLOGG_QT" klogg.nsi *>> "$env:KLOGG_WORKSPACE\out\ci\package.log"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Win package
+      shell: pwsh
+      run: |
+        $packages = Join-Path $env:KLOGG_BUILD_ROOT 'packages'
+        New-Item -ItemType Directory -Force $packages | Out-Null
+        $prefix = "klogg-$env:KLOGG_VERSION-$env:KLOGG_ARCH-$env:KLOGG_QT"
+        foreach ($suffix in 'portable.zip', 'pdb.zip', 'setup.exe') {
+          $file = "$prefix-$suffix"
+          if (-not (Test-Path $file)) { throw "missing package input $file" }
+          Copy-Item $file $packages
+        }
+
+    - name: Publish packaging log tail
+      if: failure()
+      uses: ./build/ci/actions/publish-log-tail
+      with:
+        log-file: package.log
+        title: windows package

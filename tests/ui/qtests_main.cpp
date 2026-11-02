@@ -25,8 +25,7 @@
 #include <QtConcurrent>
 
 #include <configuration.h>
-#include <linetypes.h>
-#include <highlighterset.h>
+#include <linetypes_qt.h>
 #include <persistentinfo.h>
 
 #include <logger.h>
@@ -69,6 +68,15 @@ class TestRunner : public QObject {
 
 int main( int argc, char* argv[] )
 {
+#ifdef Q_OS_WIN
+    // The offscreen platform's font database sees no system fonts on Windows
+    // (all text renders as boxes); point it at the system font directory so
+    // offscreen widget grabs stay readable
+    if ( qEnvironmentVariableIsEmpty( "QT_QPA_FONTDIR" ) ) {
+        qputenv( "QT_QPA_FONTDIR", "C:\\Windows\\Fonts" );
+    }
+#endif
+
     QApplication a( argc, argv );
 
     logging::enableLogging();
@@ -77,12 +85,14 @@ int main( int argc, char* argv[] )
     qRegisterMetaType<LineNumber>( "LineNumber" );
     qRegisterMetaType<LineLength>( "LineLength" );
 
+    // Composition root: the store location has to be selected before the first
+    // store access, which Configuration::getSynced() performs
+    PersistentInfo::initialize();
+
     auto& config = Configuration::getSynced();
     config.setSearchReadBufferSizeLines( 10 );
     config.setIndexReadBufferSizeMb( 1 );
     config.setUseSearchResultsCache( false );
-
-    auto higthlighters = HighlighterSetCollection::getSynced();
 
 #if defined( Q_OS_WIN ) || defined( Q_OS_MAC )
     config.setPollingEnabled( true );

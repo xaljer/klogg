@@ -1,0 +1,192 @@
+if(WIN32)
+  set(KLOGG_SHELLPROCESS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/shellprocess_win.cpp)
+else()
+  set(KLOGG_SHELLPROCESS_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/shellprocess_unix.cpp)
+endif()
+
+add_library(
+  klogg_ui STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/abstractlogview.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/active_screen.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/apievents.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/apisession.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/clipboard.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/crawlerwidget.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/filteredview.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/highlightercache.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/highlightersdialog.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/highlighteredit.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/highlightersetedit.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/highlightersmenu.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/linedatasource.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/patterninputwidget.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/predefinedfilterscombobox.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/predefinedfiltersdialog.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/infoline.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/pathline.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/logmainview.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/mainwindow.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/mainwindowtext.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/menu.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/optionsdialog.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/overview.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/overviewwidget.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/qfnotifications.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfind.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindengine.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindmux.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindpattern.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/quickfindwidget.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/recorder.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/selection.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/session.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/sessioninfo.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/shellprocess.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/signalmux.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/tabbedcrawlerwidget.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/uitracing.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/uiuserdata.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/viewinterface.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/viewtools.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/scratchpad.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/tabbedscratchpad.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/encodingmenu.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/favoritefiles.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/tabnamemapping.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/iconloader.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/displayfilepath.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/downloader.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/decompressor.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/dispatch_to.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/fontutils.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/colorlabelsmanager.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/eventconfigdialog.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/logparsingrulesdialog.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/sliceoverlaywidget.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/highlighteredit.ui
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/highlightersetedit.ui
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/highlightersdialog.ui
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/predefinedfiltersdialog.ui
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/optionsdialog.ui
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/abstractlogview.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/apievents.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/apisession.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/crawlerwidget.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/filteredview.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/highlightercache.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/highlightersdialog.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/highlighteredit.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/highlightersmenu.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/highlightersetedit.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/patterninputwidget.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/predefinedfilterscombobox.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/predefinedfiltersdialog.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/infoline.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/pathline.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/logmainview.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/mainwindow.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/mainwindowtext.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/menu.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/optionsdialog.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/overview.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/overviewwidget.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfind.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindengine.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindmux.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindpattern.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfindwidget.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/recorder.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/selection.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/session.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/sessioninfo.cpp
+  ${KLOGG_SHELLPROCESS_SRC}
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/signalmux.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tabbedcrawlerwidget.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/viewtools.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/scratchpad.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tabbedscratchpad.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/favoritefiles.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tabnamemapping.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/uiuserdata.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/iconloader.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/displayfilepath.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/downloader.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/decompressor.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/colorlabelsmanager.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/eventconfigdialog.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/logparsingrulesdialog.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/sliceoverlaywidget.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/include/namedsavedsearches.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/include/predefinedfilters.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/include/recentfiles.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/include/savedsearches.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/include/highlightersstore.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/include/highlightersetcollection.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/include/logtypesstore.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/include/storage_utils.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/src/namedsavedsearches.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/src/predefinedfilters.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/src/recentfiles.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/src/savedsearches.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/src/highlightersstore.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/src/logtypesstore.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/userdata/src/highlightersetcollection.cpp
+)
+
+set_target_properties(klogg_ui PROPERTIES AUTOUIC ON)
+set_target_properties(klogg_ui PROPERTIES AUTOMOC ON)
+
+# One precompiled header for the whole UI library: its translation units all pull
+# in the same heavy Qt Widgets/Core headers, so this cuts a large part of their
+# per-file parse cost. Set KLOGG_USE_PCH=OFF to compare.
+option(KLOGG_USE_PCH "Use a precompiled header for the Qt UI" ON)
+if(KLOGG_USE_PCH)
+  target_precompile_headers(klogg_ui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/klogg_ui_pch.h)
+endif()
+
+set_property(
+  TARGET klogg_ui
+  APPEND
+  PROPERTY AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+)
+
+if(KLOGG_USE_LTO)
+  set_property(TARGET klogg_ui PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+
+target_include_directories(klogg_ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
+                                           "${CMAKE_CURRENT_SOURCE_DIR}/userdata/include")
+target_link_libraries(
+  klogg_ui
+  PUBLIC project_options
+         project_warnings
+         platform
+         klogg_state
+         klogg_api
+         klogg_crash_handler
+         klogg_logdata
+         klogg_ansi
+         klogg_render
+         klogg_versioncheck
+         klogg_karchive
+         klogg_qt_codec # QTextCodec for the encoding menu and the view codecs
+         Qt${QT_VERSION_MAJOR}::Widgets
+         Qt${QT_VERSION_MAJOR}::Concurrent
+         Qt${QT_VERSION_MAJOR}::Network
+         Qt${QT_VERSION_MAJOR}::Xml
+)
+
+if(WIN32)
+  target_link_libraries(klogg_ui PUBLIC user32)
+endif()
+
+# GUI-thread trace scopes share the api module's klogg_tracing categories
+if(KLOGG_USE_PERFETTO)
+  target_link_libraries(klogg_ui PUBLIC perfetto_sdk)
+  target_compile_definitions(klogg_ui PUBLIC KLOGG_USE_PERFETTO)
+  target_include_directories(klogg_ui PUBLIC "${CMAKE_SOURCE_DIR}/src/core/api/src")
+endif()
+
+if(KLOGG_BUILD_TESTS)
+  add_subdirectory(tests)
+endif()

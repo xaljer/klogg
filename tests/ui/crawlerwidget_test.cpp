@@ -19,7 +19,10 @@
 
 #include <catch2/catch.hpp>
 
+#include <QApplication>
 #include <QScrollBar>
+#include <QShortcut>
+#include <QShortcutEvent>
 #include <QSignalSpy>
 #include <QTemporaryFile>
 #include <QTest>
@@ -28,8 +31,15 @@
 #include <qnamespace.h>
 #include <qtestmouse.h>
 
-#include "savedsearches.h"
+#include <algorithm>
+
+#include "klogg/api.h"
+
+#include "apisession.h"
+#include "configuration.h"
+#include "uiuserdata.h"
 #include "session.h"
+#include "shortcuts.h"
 #include "test_utils.h"
 
 #include "logdata.h"
@@ -102,12 +112,13 @@ struct CrawlerWidget::access_by<CrawlerWidgetPrivate> {
 
     LinesCount getLogNbLines()
     {
-        return crawler->logData_->getNbLine();
+        // getNbLine is protected on the concrete views, public on the base
+        return static_cast<const AbstractLogView*>( crawler->logMainView_ )->getNbLine();
     }
 
     LinesCount getLogFilteredNbLines()
     {
-        return crawler->logFilteredData_->getNbLine();
+        return static_cast<const AbstractLogView*>( crawler->filteredView_ )->getNbLine();
     }
 
     void selectAllInMainView()
@@ -134,6 +145,17 @@ struct CrawlerWidget::access_by<CrawlerWidgetPrivate> {
     {
         crawler->searchLineEdit_->clearEditText();
         QTest::keyClicks( crawler->searchLineEdit_, pattern );
+    }
+
+    // Emit the main view's mark signal like a gutter click would
+    void markMainLines( std::initializer_list<LineNumber::UnderlyingType> lines )
+    {
+        klogg::vector<LineNumber> toMark;
+        for ( const auto line : lines ) {
+            toMark.push_back( LineNumber( line ) );
+        }
+        Q_EMIT crawler->logMainView_->markLines( toMark );
+        QTest::qWait( 100 );
     }
 
     void enableCaseSensitiveSearch()
@@ -191,7 +213,8 @@ struct CrawlerWidget::access_by<CrawlerWidgetPrivate> {
     void clickFilteredViewLine( LineNumber::UnderlyingType lineIndex )
     {
         auto* filteredView = crawler->filteredView_;
-        if ( filteredView && crawler->logFilteredData_->getNbLine().get() > 0 ) {
+        if ( filteredView
+             && static_cast<const AbstractLogView*>( filteredView )->getNbLine().get() > 0 ) {
             filteredView->selectAndDisplayLine( LineNumber( lineIndex ) );
             QTest::qWait( 50 );
         }
@@ -271,6 +294,53 @@ struct CrawlerWidget::access_by<CrawlerWidgetPrivate> {
     {
         crawler->jumpToTop();
     }
+
+    LineNumber currentLine()
+    {
+        return crawler->currentLineNumber_;
+    }
+
+    void selectMainViewLine( LineNumber::UnderlyingType line )
+    {
+        crawler->logMainView_->selectAndDisplayLine( LineNumber( line ) );
+        QTest::qWait( 50 );
+    }
+
+    // Fire the view's QShortcut for the action directly: the itests run
+    // offscreen, where no window becomes active and focus-based shortcut
+    // dispatch never engages
+    void triggerShortcut( QWidget* view, const std::string& action )
+    {
+        const auto keys = ShortcutAction::shortcutKeys( action, Configuration::get().shortcuts() );
+        const auto shortcuts = view->findChildren<QShortcut*>();
+        const auto shortcut
+            = std::find_if( shortcuts.begin(), shortcuts.end(),
+                            [ & ]( const QShortcut* s ) { return keys.contains( s->key() ); } );
+        REQUIRE( shortcut != shortcuts.end() );
+        QShortcutEvent event( ( *shortcut )->key(), *shortcut );
+        QApplication::sendEvent( *shortcut, &event );
+        QTest::qWait( 50 );
+    }
+
+    void triggerMainNextMark()
+    {
+        triggerShortcut( crawler->logMainView_, ShortcutAction::LogViewNextMark );
+    }
+
+    void triggerMainPrevMark()
+    {
+        triggerShortcut( crawler->logMainView_, ShortcutAction::LogViewPrevMark );
+    }
+
+    void triggerFilteredNextMark()
+    {
+        triggerShortcut( crawler->filteredView_, ShortcutAction::LogViewNextMark );
+    }
+
+    void triggerFilteredPrevMark()
+    {
+        triggerShortcut( crawler->filteredView_, ShortcutAction::LogViewPrevMark );
+    }
 };
 
 using CrawlerWidgetVisitor = CrawlerWidget::access_by<CrawlerWidgetPrivate>;
@@ -281,9 +351,9 @@ SCENARIO( "Crawler widget search", "[ui]" )
     REQUIRE( generateDataFiles( file ) );
 
     Session session;
-    session.savedSearches().clear();
+    { klogg::ui::searchHistory().clear(); klogg::ui::saveSearchHistory(); }
 
-    REQUIRE( session.savedSearches().recentSearches().empty() );
+    REQUIRE( klogg::ui::searchHistory().recentSearches().empty() );
 
     CrawlerWidgetVisitor crawlerVisitor;
     crawlerVisitor.crawler.reset( static_cast<CrawlerWidget*>(
@@ -396,7 +466,7 @@ SCENARIO( "Crawler widget text wrap", "[ui][textwrap]" )
     REQUIRE( generateDataFiles( file ) );
 
     Session session;
-    session.savedSearches().clear();
+    { klogg::ui::searchHistory().clear(); klogg::ui::saveSearchHistory(); }
 
     CrawlerWidgetVisitor crawlerVisitor;
     crawlerVisitor.crawler.reset( static_cast<CrawlerWidget*>(
@@ -517,7 +587,7 @@ SCENARIO( "Crawler widget text wrap scroll range", "[ui][textwrap]" )
     REQUIRE( generateLongLineDataFiles( file, 200, 200 ) );
 
     Session session;
-    session.savedSearches().clear();
+    { klogg::ui::searchHistory().clear(); klogg::ui::saveSearchHistory(); }
 
     CrawlerWidgetVisitor crawlerVisitor;
     crawlerVisitor.crawler.reset( static_cast<CrawlerWidget*>(
@@ -709,5 +779,264 @@ SCENARIO( "Go to top (T) scrolls both views regardless of focus", "[ui][shortcut
                 REQUIRE( crawlerVisitor.filteredVerticalScrollValue() == 0 );
             }
         }
+    }
+}
+
+SCENARIO( "Two views of the same file share one API file entry", "[ui]" )
+{
+    QTemporaryFile file{ "crawler_shared_test_XXXXXX" };
+    REQUIRE( generateDataFiles( file ) );
+
+    Session session;
+
+    CrawlerWidgetVisitor firstVisitor;
+    firstVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+    REQUIRE( waitUiState( [ & ]() { return firstVisitor.isLoadingFinished(); } ) );
+
+    // The second open mirrors "open in new window": same API FileId, shared
+    // index, independent per-view filtered data
+    CrawlerWidgetVisitor secondVisitor;
+    secondVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+    REQUIRE( waitUiState( [ & ]() { return secondVisitor.isLoadingFinished(); } ) );
+
+    const auto openFiles = klogg::ui::apiSession().openFiles();
+    REQUIRE( openFiles.has_value() );
+    const auto entriesForFile
+        = std::count_if( openFiles->begin(), openFiles->end(), [ & ]( const auto& info ) {
+              return info.path == file.fileName().toStdString();
+          } );
+    REQUIRE( entriesForFile == 1 );
+
+    REQUIRE( session.isShared( firstVisitor.crawler.get() ) );
+    REQUIRE( session.isShared( secondVisitor.crawler.get() ) );
+
+    REQUIRE( firstVisitor.getLogNbLines().get() == SL_NB_LINES );
+    REQUIRE( secondVisitor.getLogNbLines().get() == SL_NB_LINES );
+
+    WHEN( "the first view is closed" )
+    {
+        auto* firstCrawler = firstVisitor.crawler.get();
+        session.close( firstCrawler );
+        // The API reference drops when the view is actually destroyed
+        firstVisitor.crawler.reset();
+
+        THEN( "the second view keeps working" )
+        {
+            REQUIRE( !session.isShared( secondVisitor.crawler.get() ) );
+            REQUIRE( secondVisitor.getLogNbLines().get() == SL_NB_LINES );
+
+            secondVisitor.setSearchPattern( "this is line" );
+            secondVisitor.runSearch();
+            REQUIRE( waitUiState(
+                [ & ]() { return secondVisitor.getLogFilteredNbLines().get() == SL_NB_LINES; } ) );
+        }
+    }
+}
+
+SCENARIO( "Marks join the filtered union of a live search", "[ui]" )
+{
+    QTemporaryFile file{ "crawler_mark_union_XXXXXX" };
+    REQUIRE( generateDataFiles( file ) );
+
+    Session session;
+    { klogg::ui::searchHistory().clear(); klogg::ui::saveSearchHistory(); }
+
+    CrawlerWidgetVisitor crawlerVisitor;
+    crawlerVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+
+    REQUIRE(
+        waitUiState( [ & ]() { return crawlerVisitor.getLogNbLines().get() == SL_NB_LINES; } ) );
+    REQUIRE( waitUiState( [ & ]() { return crawlerVisitor.isLoadingFinished(); } ) );
+
+    // Lines 000010-000019 match; the default visibility is Marks+Matches
+    crawlerVisitor.setSearchPattern( "this is line 00001" );
+    crawlerVisitor.runSearch();
+    REQUIRE(
+        waitUiState( [ & ]() { return crawlerVisitor.getLogFilteredNbLines().get() == 10; } ) );
+
+    // Marks added after the search started must re-mirror into the union
+    crawlerVisitor.markMainLines( { 0, 50 } );
+
+    THEN( "marked non-matching lines appear in the filtered view" )
+    {
+        REQUIRE(
+            waitUiState( [ & ]() { return crawlerVisitor.getLogFilteredNbLines().get() == 12; } ) );
+    }
+}
+
+SCENARIO( "Marks changed in one view invalidate the other view's mark caches", "[ui]" )
+{
+    QTemporaryFile file{ "crawler_marks_cross_window_XXXXXX" };
+    REQUIRE( generateDataFiles( file ) );
+
+    Session session;
+    { klogg::ui::searchHistory().clear(); klogg::ui::saveSearchHistory(); }
+
+    CrawlerWidgetVisitor firstVisitor;
+    firstVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+    REQUIRE( waitUiState( [ & ]() { return firstVisitor.isLoadingFinished(); } ) );
+
+    // The second open mirrors "open in new window": same API FileId
+    CrawlerWidgetVisitor secondVisitor;
+    secondVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+    REQUIRE( waitUiState( [ & ]() { return secondVisitor.isLoadingFinished(); } ) );
+
+    // No search in either view: the filtered views show the marks projection,
+    // initially empty
+    REQUIRE( waitUiState( [ & ]() { return firstVisitor.getLogFilteredNbLines().get() == 0; } ) );
+    REQUIRE( waitUiState( [ & ]() { return secondVisitor.getLogFilteredNbLines().get() == 0; } ) );
+
+    // Populate the second view's mark navigation cache while it is still
+    // empty; the marks.changed event must invalidate it
+    secondVisitor.triggerFilteredNextMark();
+
+    WHEN( "marks are added through the first view" )
+    {
+        firstVisitor.markMainLines( { 10, 50 } );
+        REQUIRE(
+            waitUiState( [ & ]() { return firstVisitor.getLogFilteredNbLines().get() == 2; } ) );
+
+        THEN( "the second view's projection and navigation pick them up" )
+        {
+            REQUIRE( waitUiState(
+                [ & ]() { return secondVisitor.getLogFilteredNbLines().get() == 2; } ) );
+
+            // Projection index 0 is the marked source line 10; the next-mark
+            // navigation must not serve the stale (empty) cache
+            secondVisitor.clickFilteredViewLine( 0 );
+            secondVisitor.triggerFilteredNextMark();
+            REQUIRE( secondVisitor.currentLine().get() == 50 );
+        }
+    }
+}
+
+SCENARIO( "Next/prev mark shortcuts move in the same direction in both views", "[ui][shortcut]" )
+{
+    QTemporaryFile file{ "crawler_mark_nav_XXXXXX" };
+    REQUIRE( generateDataFiles( file ) );
+
+    Session session;
+    { klogg::ui::searchHistory().clear(); klogg::ui::saveSearchHistory(); }
+
+    CrawlerWidgetVisitor crawlerVisitor;
+    crawlerVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+
+    REQUIRE(
+        waitUiState( [ & ]() { return crawlerVisitor.getLogNbLines().get() == SL_NB_LINES; } ) );
+    REQUIRE( waitUiState( [ & ]() { return crawlerVisitor.isLoadingFinished(); } ) );
+
+    // Lines 000010-000019 match; the default visibility is Marks+Matches
+    crawlerVisitor.setSearchPattern( "this is line 00001" );
+    crawlerVisitor.runSearch();
+    REQUIRE(
+        waitUiState( [ & ]() { return crawlerVisitor.getLogFilteredNbLines().get() == 10; } ) );
+
+    // Mark 000010 (already a match), 000050 and 000090: the two non-matching
+    // marks join the union
+    crawlerVisitor.markMainLines( { 10, 50, 90 } );
+    REQUIRE(
+        waitUiState( [ & ]() { return crawlerVisitor.getLogFilteredNbLines().get() == 12; } ) );
+
+    GIVEN( "the main view" )
+    {
+        crawlerVisitor.selectMainViewLine( 0 );
+
+        THEN( "next mark jumps towards the file end" )
+        {
+            crawlerVisitor.triggerMainNextMark();
+            REQUIRE( crawlerVisitor.currentLine().get() == 10 );
+
+            crawlerVisitor.triggerMainNextMark();
+            REQUIRE( crawlerVisitor.currentLine().get() == 50 );
+
+            AND_THEN( "prev mark jumps back towards the file start" )
+            {
+                crawlerVisitor.triggerMainPrevMark();
+                REQUIRE( crawlerVisitor.currentLine().get() == 10 );
+            }
+        }
+    }
+
+    GIVEN( "the filtered view" )
+    {
+        // Union index 0 is the marked source line 000010
+        crawlerVisitor.clickFilteredViewLine( 0 );
+
+        THEN( "next mark jumps towards the file end, like in the main view" )
+        {
+            crawlerVisitor.triggerFilteredNextMark();
+            REQUIRE( crawlerVisitor.filteredViewSelectedText().contains(
+                QStringLiteral( "line 000050" ) ) );
+            // The selection syncs the main view to the same source line
+            REQUIRE( crawlerVisitor.currentLine().get() == 50 );
+
+            crawlerVisitor.triggerFilteredNextMark();
+            REQUIRE( crawlerVisitor.filteredViewSelectedText().contains(
+                QStringLiteral( "line 000090" ) ) );
+
+            AND_THEN( "prev mark jumps back towards the file start" )
+            {
+                crawlerVisitor.triggerFilteredPrevMark();
+                REQUIRE( crawlerVisitor.filteredViewSelectedText().contains(
+                    QStringLiteral( "line 000050" ) ) );
+
+                crawlerVisitor.triggerFilteredPrevMark();
+                REQUIRE( crawlerVisitor.filteredViewSelectedText().contains(
+                    QStringLiteral( "line 000010" ) ) );
+                REQUIRE( crawlerVisitor.currentLine().get() == 10 );
+            }
+        }
+    }
+}
+
+SCENARIO( "Copying a large filtered selection maps the source lines", "[ui]" )
+{
+    // Every even line matches; the range copy pulls one getLines batch and
+    // then maps each view index to its source line through
+    // FilteredView::getLineNumber (served from the batch's frame stash)
+    constexpr int nbLines = 2000;
+    constexpr int nbMatches = nbLines / 2;
+
+    QTemporaryFile file{ "crawler_copy_test_XXXXXX" };
+    REQUIRE( file.open() );
+    for ( int i = 0; i < nbLines; ++i ) {
+        file.write( QStringLiteral( "LOGDATA line %1%2" )
+                        .arg( i, 6, 10, QLatin1Char( '0' ) )
+                        .arg( i % 2 == 0 ? QStringLiteral( " MATCHME" ) : QString() )
+                        .toUtf8() );
+        file.write( "\n", 1 );
+    }
+    file.flush();
+
+    Session session;
+    { klogg::ui::searchHistory().clear(); klogg::ui::saveSearchHistory(); }
+
+    CrawlerWidgetVisitor crawlerVisitor;
+    crawlerVisitor.crawler.reset( static_cast<CrawlerWidget*>(
+        session.open( file.fileName(), []() { return new CrawlerWidget(); } ) ) );
+
+    REQUIRE( waitUiState( [ & ]() { return crawlerVisitor.getLogNbLines().get() == nbLines; } ) );
+    REQUIRE( waitUiState( [ & ]() { return crawlerVisitor.isLoadingFinished(); } ) );
+
+    crawlerVisitor.setSearchPattern( "MATCHME" );
+    crawlerVisitor.runSearch();
+    REQUIRE( waitUiState(
+        [ & ]() { return crawlerVisitor.getLogFilteredNbLines().get() == nbMatches; } ) );
+
+    crawlerVisitor.selectAllInFilteredView();
+    const auto copiedLines = crawlerVisitor.filteredViewSelectedText().split( QChar::LineFeed );
+
+    // One entry per match, in ascending source-line order: wrong or duplicate
+    // line-number mappings would collapse or reorder the map
+    REQUIRE( copiedLines.size() == nbMatches );
+    for ( int i = 0; i < nbMatches; ++i ) {
+        REQUIRE( copiedLines[ i ].contains(
+            QStringLiteral( "line %1" ).arg( i * 2, 6, 10, QLatin1Char( '0' ) ) ) );
     }
 }

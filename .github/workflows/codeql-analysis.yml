@@ -27,7 +27,7 @@ jobs:
             qt_version: 6.7.3
             qt_arch: linux_gcc_64
             qt_modules: qt5compat
-            languages: ['cpp']
+            languages: cpp
 
     steps:
     - name: Checkout repository
@@ -46,28 +46,28 @@ jobs:
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
-        languages: ${{ matrix.config.language }}
+        languages: ${{ matrix.config.languages }}
         # If you wish to specify custom queries, you can do so here or in a config file.
         # By default, queries listed here will override any specified in a config file. 
         # Prefix the list here with "+" to use these queries and those in the config file.
         # queries: ./path/to/local/query, your-org/your-repo/queries@main
 
-    - uses: ./.github/actions/agent-setup
+    - uses: ./build/ci/actions/agent-setup
 
     - name: Prepare compiler env
       run: |
         echo "CC=gcc-13" >> $GITHUB_ENV
         echo "CXX=g++-13" >> $GITHUB_ENV
 
+    # build/ is a tracked source directory (build/cmake, build/ci, ...), so the
+    # build tree has to live outside it.
     - name: configure
       run: |
-        mkdir build
-        cd build
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKLOGG_GENERIC_CPU=ON -DKLOGG_USE_SENTRY=OFF -DKLOGG_USE_VECTORSCAN=OFF ..
+        cmake -S . -B out/codeql -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKLOGG_GENERIC_CPU=ON -DKLOGG_USE_SENTRY=OFF -DKLOGG_USE_VECTORSCAN=OFF
 
     - name: build
       run: |
-        cmake --build build -t klogg
+        cmake --build out/codeql -t klogg
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3

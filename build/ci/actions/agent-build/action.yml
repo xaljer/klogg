@@ -1,0 +1,35 @@
+name: "Configure and build"
+description: "Generate the build files, build the code and publish the log tail when it fails"
+runs:
+  using: "composite"
+  steps:
+
+    - name: Prepare compiler env
+      shell: sh
+      run: |
+        echo "CC=${{ matrix.config.cc }}" >> $GITHUB_ENV
+        echo "CXX=${{ matrix.config.cxx }}" >> $GITHUB_ENV
+
+    - name: configure
+      shell: bash
+      run: |
+        mkdir -p "$KLOGG_BUILD_ROOT"
+        cd "$KLOGG_BUILD_ROOT"
+        set -o pipefail
+        cmake $KLOGG_CMAKE_OPTS -DCPM_SOURCE_CACHE="$KLOGG_WORKSPACE/cpm_cache" "$KLOGG_WORKSPACE" \
+          2>&1 | tee build.log
+
+    - name: build
+      shell: bash
+      run: |
+        set -o pipefail
+        cmake --build "$KLOGG_BUILD_ROOT" -t ci_build -- -k 0 2>&1 | tee -a "$KLOGG_BUILD_ROOT/build.log"
+
+    # Job logs need repo admin rights; a check run is readable by anyone, so the
+    # failing tail lands somewhere that can be inspected without pasting it.
+    - name: Publish build log tail
+      if: failure()
+      uses: ./build/ci/actions/publish-log-tail
+      with:
+        log-file: build.log
+        title: build (${{ runner.os }})

@@ -1,0 +1,71 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "KLOGG_USE_LTO": "OFF",
+        "KLOGG_USE_SENTRY": "OFF",
+        "KLOGG_USE_HYPERSCAN": "OFF",
+        "KLOGG_USE_VECTORSCAN": "OFF",
+        "KLOGG_USE_PERFETTO": "OFF",
+        "CMAKE_PREFIX_PATH": "C:/Qt/6.7.3/msvc2019_64",
+        "QT_DIR": "C:/Qt/6.7.3/msvc2019_64/lib/cmake/Qt6",
+        "Qt6_DIR": "C:/Qt/6.7.3/msvc2019_64/lib/cmake/Qt6",
+        "CPM_SOURCE_CACHE": "${sourceDir}/.cpm_cache",
+        "FETCHCONTENT_FULLY_DISCONNECTED": "OFF",
+        "FETCHCONTENT_SOURCE_DIR_CATCH2": "${sourceDir}/.cpm_cache/catch2-src"
+      }
+    },
+    {
+      "name": "qt",
+      "displayName": "Qt shell + core + server + all tests",
+      "description": "Default local tree. Output goes to out/qt/output.",
+      "inherits": "base"
+    },
+    {
+      "name": "server",
+      "displayName": "Zero-Qt server host only",
+      "description": "KLOGG_BUILD_SERVER_ONLY: no Qt lookup, no GUI, no tests.",
+      "inherits": "base",
+      "cacheVariables": {
+        "KLOGG_BUILD_SERVER_ONLY": "ON",
+        "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "qt-free",
+      "displayName": "Zero-Qt core + server + Qt-free tests",
+      "description": "Same tree the Qt-free CI gate builds: no Qt lookup, but the Qt-free suites run.",
+      "inherits": "base",
+      "cacheVariables": {
+        "KLOGG_BUILD_SERVER_ONLY": "ON",
+        "KLOGG_BUILD_TESTS": "ON",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "clang",
+      "displayName": "Zero-Qt core with clang-cl",
+      "description": "Verifies the core compiles without MSVC.",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "WARNINGS_AS_ERRORS": "OFF",
+        "KLOGG_USE_PERFETTO": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "qt", "configurePreset": "qt" },
+    { "name": "server", "configurePreset": "server" },
+    { "name": "qt-free", "configurePreset": "qt-free" },
+    { "name": "clang", "configurePreset": "clang" }
+  ]
+}

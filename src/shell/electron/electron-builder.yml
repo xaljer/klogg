@@ -1,0 +1,46 @@
+appId: com.github.variar.klogg
+productName: klogg
+asar: true
+compression: normal
+electronLanguages:
+  - zh-CN
+  - en-US
+electronDownload:
+  mirror: https://cdn.npmmirror.com/binaries/electron/
+npmRebuild: false
+directories:
+  output: ../../../out/release/electron
+files:
+  - electron/**/*
+  - package.json
+extraResources:
+  - from: ../../../out/electron/resources/server
+    to: server
+  - from: resources/tray.png
+    to: tray.png
+  - from: ../../../out/web
+    to: web
+win:
+  icon: ../qt_legacy/app/images/glogg.iconset/icon_256x256.png
+  artifactName: klogg-${version}-${arch}-win.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+  signExecutable: false
+linux:
+  icon: ../qt_legacy/app/images/glogg.iconset/icon_256x256.png
+  category: Utility
+  target:
+    - target: AppImage
+      arch:
+        - x64
+appImage:
+  artifactName: klogg-electron-${version}-x86_64.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  artifactName: klogg-${version}-setup.${ext}

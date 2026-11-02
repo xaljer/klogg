@@ -1,0 +1,23 @@
+name: "Run all tests"
+description: "Run the project's ctest suites and publish the log tail when they fail"
+runs:
+  using: "composite"
+  steps:
+
+    - name: test
+      shell: bash
+      run: |
+        cd "$KLOGG_BUILD_ROOT"
+        set -o pipefail
+        # CPM pulls in projects (simdutf, CRoaring, uchardet, expected, ...) that
+        # register their own ctest entries; CI never builds those binaries, so a
+        # bare ctest reports them all as failures. Run only the project's suites.
+        ctest -R "^(platform_tests|render_tests|core_link_probe|api_link_probe|klogg_[a-z0-9_]*)$" \
+              --no-tests=error --output-on-failure 2>&1 | tee test.log
+
+    - name: Publish test log tail
+      if: failure()
+      uses: ./build/ci/actions/publish-log-tail
+      with:
+        log-file: test.log
+        title: tests (${{ runner.os }})

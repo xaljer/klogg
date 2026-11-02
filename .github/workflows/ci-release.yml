@@ -26,6 +26,35 @@ jobs:
         workflow: ci-build.yml
         run_id: ${{ github.event.inputs.ci-run-id }}
 
+    # The Electron shell is packaged by its own workflow; search backwards for
+    # the last run that actually produced the installer.
+    - name: Download Electron installer
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: desktop-ci.yml
+        workflow_conclusion: success
+        name: klogg-electron-installer-x64
+        search_artifacts: true
+        path: electron-packages
+
+    - name: Download Electron AppImage (22.04)
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: desktop-ci.yml
+        workflow_conclusion: success
+        name: klogg-electron-appimage-jammy
+        search_artifacts: true
+        path: electron-appimages
+
+    - name: Download Electron AppImage (26.04)
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: desktop-ci.yml
+        workflow_conclusion: success
+        name: klogg-electron-appimage-2604
+        search_artifacts: true
+        path: electron-appimages
+
     - name: Initialize version
       run: echo "KLOGG_VERSION=`cat klogg_version/klogg_version.txt`" >> $GITHUB_ENV
 
@@ -50,15 +79,11 @@ jobs:
     - name: Upload symbols linux
       shell: sh
       run: |
-        xz -d ./packages-focal/klogg_focal.debug.xz
         xz -d ./packages-jammy/klogg_jammy.debug.xz
         xz -d ./packages-noble/klogg_noble.debug.xz
-        xz -d ./packages-oracle/klogg_oracle.debug.xz
         xz -d ./packages-appimage/klogg_appimage.debug.xz
-        sentry-cli upload-dif ./packages-focal/klogg_focal.debug ./packages-focal/klogg_focal
         sentry-cli upload-dif ./packages-jammy/klogg_jammy.debug ./packages-jammy/klogg_jammy
         sentry-cli upload-dif ./packages-noble/klogg_noble.debug  ./packages-noble/klogg_noble
-        sentry-cli upload-dif ./packages-oracle/klogg_oracle.debug ./packages-oracle/klogg_oracle
         sentry-cli upload-dif ./packages-appimage/klogg_appimage.debug  ./packages-appimage/klogg_appimage
 
     - name: Upload symbols mac
@@ -69,23 +94,18 @@ jobs:
     - name: Upload symbols win
       shell: sh
       run: |
-        sentry-cli upload-dif ./packages-windows-x86-qt5/klogg-$KLOGG_VERSION-x86-Qt5-pdb.zip 
         sentry-cli upload-dif ./packages-windows-x64-qt6/klogg-$KLOGG_VERSION-x64-Qt6-pdb.zip
 
     - name: Cleanup release artifacts
       shell: sh
       run: |
-        rm -rf ./packages-focal/klogg_focal
         rm -rf ./packages-jammy/klogg_jammy
         rm -rf ./packages-noble/klogg_noble
-        rm -rf ./packages-oracle/klogg_oracle
         rm -rf ./packages-appimage/klogg_appimage
         rm -rf ./packages-macos-arm-qt6/klogg-arm64.app
         mkdir ./linux-debug
-        mv ./packages-focal/klogg_focal.debug ./linux-debug
         mv ./packages-jammy/klogg_jammy.debug ./linux-debug
         mv ./packages-noble/klogg_noble.debug ./linux-debug
-        mv ./packages-oracle/klogg_oracle.debug ./linux-debug
         mv ./packages-appimage/klogg_appimage.debug ./linux-debug
         tar -cJf ./linux-debug/klogg-$KLOGG_VERSION-symbols.tar.xz ./linux-debug/*
         rm ./linux-debug/*.debug
@@ -95,13 +115,13 @@ jobs:
       run: |
         mkdir ./packages-bin
         mv ./packages-appimage/klogg_deps.tar.xz ./packages-bin/klogg-$KLOGG_VERSION-deps.tar.xz
-        ar p  ./packages-focal/klogg-$KLOGG_VERSION-focal.deb data.tar.gz > ./packages-bin/klogg-$KLOGG_VERSION-bin.tar.gz
+        ar p  ./packages-jammy/klogg-$KLOGG_VERSION-jammy.deb data.tar.gz > ./packages-bin/klogg-$KLOGG_VERSION-bin.tar.gz
         mv ./klogg_version/klogg_version.txt ./packages-bin
 
     - name: Prepare checksums
       shell: sh
       run: |
-        sha256sum --binary ./packages-bin/* ./packages-focal/* ./packages-jammy/* ./packages-noble/* ./packages-oracle/* ./packages-appimage/*  > ./packages-bin/klogg-$KLOGG_VERSION-sha256.txt
+        sha256sum --binary ./packages-bin/* ./packages-jammy/* ./packages-noble/* ./packages-appimage/*  > ./packages-bin/klogg-$KLOGG_VERSION-sha256.txt
         
     - name: Release win
       uses: "marvinpinto/action-automatic-releases@latest"
@@ -110,8 +130,8 @@ jobs:
         automatic_release_tag: continuous-win
         prerelease: true
         files: |
-          ./packages-windows-x86-qt5/*
           ./packages-windows-x64-qt6/*
+          ./electron-packages/*
 
     - name: Release linux
       uses: "marvinpinto/action-automatic-releases@latest"
@@ -120,13 +140,12 @@ jobs:
         automatic_release_tag: continuous-linux
         prerelease: true
         files: |
-          ./packages-focal/*
           ./packages-jammy/*
           ./packages-noble/*
-          ./packages-oracle/*
           ./packages-appimage/*
           ./packages-bin/*
           ./linux-debug/*
+          ./electron-appimages/*
 
     - name: Release mac
       uses: "marvinpinto/action-automatic-releases@latest"

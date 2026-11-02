@@ -29,6 +29,35 @@ jobs:
         workflow: ci-build.yml
         run_id: ${{ github.event.inputs.ci-run-id }}
 
+    # The Electron shell is packaged by its own workflow; search backwards for
+    # the last run that actually produced the installer.
+    - name: Download Electron installer
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: desktop-ci.yml
+        workflow_conclusion: success
+        name: klogg-electron-installer-x64
+        search_artifacts: true
+        path: electron-packages
+
+    - name: Download Electron AppImage (22.04)
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: desktop-ci.yml
+        workflow_conclusion: success
+        name: klogg-electron-appimage-jammy
+        search_artifacts: true
+        path: electron-appimages
+
+    - name: Download Electron AppImage (26.04)
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: desktop-ci.yml
+        workflow_conclusion: success
+        name: klogg-electron-appimage-2604
+        search_artifacts: true
+        path: electron-appimages
+
     - name: Initialize version
       run: echo "KLOGG_VERSION=`cat klogg_version/klogg_version.txt`" >> $GITHUB_ENV
 
@@ -39,23 +68,16 @@ jobs:
       shell: sh
       run: |
         # Debug symbols are optional in without-sentry flow.
-        # Known case: oracle debug symbols may be missing because Oracle build uses -DKLOGG_USE_SENTRY=OFF in ci-build.yml.
-        [ -f ./packages-focal/klogg_focal.debug.xz ] && xz -d ./packages-focal/klogg_focal.debug.xz || echo "warn: missing focal debug symbols"
         [ -f ./packages-jammy/klogg_jammy.debug.xz ] && xz -d ./packages-jammy/klogg_jammy.debug.xz || echo "warn: missing jammy debug symbols"
         [ -f ./packages-noble/klogg_noble.debug.xz ] && xz -d ./packages-noble/klogg_noble.debug.xz || echo "warn: missing noble debug symbols"
-        [ -f ./packages-oracle/klogg_oracle.debug.xz ] && xz -d ./packages-oracle/klogg_oracle.debug.xz || echo "warn: missing oracle debug symbols (known)"
         [ -f ./packages-appimage/klogg_appimage.debug.xz ] && xz -d ./packages-appimage/klogg_appimage.debug.xz || echo "warn: missing appimage debug symbols"
-        rm -rf ./packages-focal/klogg_focal
         rm -rf ./packages-jammy/klogg_jammy
         rm -rf ./packages-noble/klogg_noble
-        rm -rf ./packages-oracle/klogg_oracle
         rm -rf ./packages-appimage/klogg_appimage
         rm -rf ./packages-macos-arm-qt6/klogg-arm64.app
         mkdir ./linux-debug
-        [ -f ./packages-focal/klogg_focal.debug ] && mv ./packages-focal/klogg_focal.debug ./linux-debug
         [ -f ./packages-jammy/klogg_jammy.debug ] && mv ./packages-jammy/klogg_jammy.debug ./linux-debug
         [ -f ./packages-noble/klogg_noble.debug ] && mv ./packages-noble/klogg_noble.debug ./linux-debug
-        [ -f ./packages-oracle/klogg_oracle.debug ] && mv ./packages-oracle/klogg_oracle.debug ./linux-debug
         [ -f ./packages-appimage/klogg_appimage.debug ] && mv ./packages-appimage/klogg_appimage.debug ./linux-debug
         if ls ./linux-debug/*.debug >/dev/null 2>&1; then tar -cJf ./linux-debug/klogg-$KLOGG_VERSION-symbols.tar.xz ./linux-debug/*; rm ./linux-debug/*.debug; else echo "warn: no linux debug symbols packaged"; fi
 
@@ -64,13 +86,13 @@ jobs:
       run: |
         mkdir ./packages-bin
         mv ./packages-appimage/klogg_deps.tar.xz ./packages-bin/klogg-$KLOGG_VERSION-deps.tar.xz
-        ar p  ./packages-focal/klogg-$KLOGG_VERSION-focal.deb data.tar.gz > ./packages-bin/klogg-$KLOGG_VERSION-bin.tar.gz
+        ar p  ./packages-jammy/klogg-$KLOGG_VERSION-jammy.deb data.tar.gz > ./packages-bin/klogg-$KLOGG_VERSION-bin.tar.gz
         mv ./klogg_version/klogg_version.txt ./packages-bin
 
     - name: Prepare checksums
       shell: sh
       run: |
-        sha256sum --binary ./packages-bin/* ./packages-focal/* ./packages-jammy/* ./packages-noble/* ./packages-oracle/* ./packages-appimage/*  > ./packages-bin/klogg-$KLOGG_VERSION-sha256.txt
+        sha256sum --binary ./packages-bin/* ./packages-jammy/* ./packages-noble/* ./packages-appimage/*  > ./packages-bin/klogg-$KLOGG_VERSION-sha256.txt
         
     - name: Release win
       uses: "marvinpinto/action-automatic-releases@latest"
@@ -79,8 +101,8 @@ jobs:
         automatic_release_tag: continuous-win
         prerelease: true
         files: |
-          ./packages-windows-x86-qt5/*
           ./packages-windows-x64-qt6/*
+          ./electron-packages/*
 
     - name: Release linux
       uses: "marvinpinto/action-automatic-releases@latest"
@@ -89,13 +111,12 @@ jobs:
         automatic_release_tag: continuous-linux
         prerelease: true
         files: |
-          ./packages-focal/*
           ./packages-jammy/*
           ./packages-noble/*
-          ./packages-oracle/*
           ./packages-appimage/*
           ./packages-bin/*
           ./linux-debug/*
+          ./electron-appimages/*
 
     - name: Release mac
       uses: "marvinpinto/action-automatic-releases@latest"

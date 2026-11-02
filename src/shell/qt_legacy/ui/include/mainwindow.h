@@ -1,0 +1,419 @@
+/*
+ * Copyright (C) 2009, 2010, 2011, 2013, 2014 Nicolas Bonnefon and other contributors
+ *
+ * This file is part of glogg.
+ *
+ * glogg is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * glogg is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with glogg.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/*
+ * Copyright (C) 2016 -- 2019 Anton Filimonov and other contributors
+ *
+ * This file is part of klogg.
+ *
+ * klogg is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * klogg is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with klogg.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
+#include <QMainWindow>
+#include <QMenu>
+#include <QSystemTrayIcon>
+#include <QTemporaryDir>
+#include <QComboBox>
+#include <QFutureWatcher>
+#include <QProgressDialog>
+
+#include <QTranslator>
+#include <array>
+#include <memory>
+#include <mutex>
+#include <vector>
+
+#include "configuration.h"
+#include "crawlerwidget.h"
+#include "downloader.h"
+#include "iconloader.h"
+#include "pathline.h"
+#include "quickfindmux.h"
+#include "quickfindwidget.h"
+#include "recorder.h"
+#include "recentfiles.h"
+#include "session.h"
+#include "signalmux.h"
+#include "tabbedcrawlerwidget.h"
+#include "tabbedscratchpad.h"
+#include "eventvisualization.h"
+
+class SliceOverlayWidget;
+
+class QAction;
+class QActionGroup;
+class Session;
+class RecentFiles;
+class HighlightersMenu;
+
+// Main window of the application, creates menus, toolbar and
+// the CrawlerWidget
+class MainWindow : public QMainWindow {
+    Q_OBJECT
+
+  public:
+    explicit MainWindow( WindowSession session );
+
+    // Re-install the geometry stored in config file
+    // (should be done before 'Widget::show()')
+    void reloadGeometry();
+    // Re-load the files from the previous session
+    void reloadSession();
+    // Loads the initial file (parameter passed or from config file)
+    void loadInitialFile( QString fileName, bool followFile );
+
+    void reTranslateUI();
+
+    static int installLanguage( QString lang );
+    QAction* visualizeInKloggActionForTest() const;
+    bool isSliceOverlayVisibleForTest() const;
+
+  public Q_SLOTS:
+    // Load a file in a new tab (non-interactive)
+    // (for use from e.g. IPC)
+    void loadFileNonInteractive( const QString& file_name );
+
+    void loadFileFromAnotherWindow( const QString& fileName, uint64_t topLine,
+                                    const QString& viewContext, const QString& searchText );
+
+  protected:
+    void closeEvent( QCloseEvent* event ) override;
+    void changeEvent( QEvent* event ) override;
+
+    // Drag and drop support
+    void dragEnterEvent( QDragEnterEvent* event ) override;
+    void dropEvent( QDropEvent* event ) override;
+
+    bool event( QEvent* event ) override;
+    bool eventFilter( QObject* watched, QEvent* event ) override;
+    void resizeEvent( QResizeEvent* event ) override;
+
+  private:
+    enum class ActionInitiator { User, App };
+
+  private Q_SLOTS:
+    void open();
+    void openFileFromRecent( QAction* action );
+    void openFileFromFavorites( QAction* action );
+    void switchToOpenedFile( QAction* action );
+    void closeTab( ActionInitiator initiator );
+    void closeAll( ActionInitiator initiator );
+    void selectAll();
+    void copy();
+    void copyWithColor();
+    void find();
+    void clearLog();
+    void copyFullPath();
+    void openContainingFolder();
+    void openInEditor();
+    void openClipboard();
+    void openUrl();
+    void editHighlighters();
+    void editPredefinedFilters( const QString& newFilter = {}, bool useRegex = false );
+    void options();
+    void about();
+    void aboutQt();
+    void documentation();
+    void showScratchPad();
+    void sendToScratchpad( QString );
+    void replaceDataInScratchpad( QString );
+    void encodingChanged( QAction* action );
+    void addToFavorites();
+    void removeFromFavorites();
+    void selectOpenedFile();
+    void generateDump();
+
+    // Change the view settings
+    void toggleOverviewVisibility( bool isVisible );
+    void toggleMainLineNumbersVisibility( bool isVisible );
+    void toggleFilteredLineNumbersVisibility( bool isVisible );
+
+    // Change the follow mode checkbox and send the followSet signal down
+    void changeFollowMode( bool follow );
+
+    // Update the selection information displayed in the status bar.
+    // Must be passed as the internal (starts at 0) line number.
+    void lineNumberHandler( LineNumber startLine, LinesCount nLines, LineColumn startCol,
+                            LineLength nSymbols );
+
+    // Save current search in line edit as predefined filter.
+    // Opens dialog with new entry.
+    void newPredefinedFilterHandler( QString newFilter, bool useRegex );
+
+    // Instructs the widget to update the loading progress gauge
+    void updateLoadingProgress( int progress );
+    // Instructs the widget to display the 'normal' status bar,
+    // without the progress gauge and with file info
+    // or an error recovery when loading is finished
+    void handleLoadingFinished( LoadingStatus status );
+
+        // Update quick find searchable
+
+        void handleFilteredViewChanged();
+
+    
+
+        // Handle event visibility request from CrawlerWidget
+
+        void onEventVisibilityRequested();
+        void onVisibilityChanged( bool includesEvents );
+        void onEventCategoryChanged( QAction* action = nullptr );
+        void onSelectedSourceLineChanged( LineNumber line );
+        void setSliceOverlayEnabled( bool enabled );
+
+        QStringList getSelectedEventCategories() const;
+        void updateEventCategoryMenu();
+        void updateEventCategoryButtonText();
+        void updateSliceOverlayPosition();
+        void refreshSliceOverlayForSelectedLine();
+        bool isSliceOverlayEnabled() const;
+
+    
+
+    
+
+    
+
+    // Close the tab with the passed index
+    void closeTab( int index, ActionInitiator initiator );
+    // Setup the tab with current index for view
+    void currentTabChanged( int index );
+
+    // Instructs the widget to change the pattern in the QuickFind widget
+    // and confirm it.
+    void changeQFPattern( const QString& newPattern );
+
+  Q_SIGNALS:
+    // Is emitted when new settings must be used
+    void optionsChanged();
+    // Is emitted when the 'follow' option is enabled/disabled
+    void followSet( bool checked );
+    // Is emitted when the 'text wrap' option is enabled/disabled
+    void textWrapSet( bool checked );
+    // Is emitted when the 'chip mode' option is enabled/disabled
+    void chipModeSet( bool checked );
+    // Is emitted before the QuickFind box is activated,
+    // to allow crawlers to get search in the right view.
+    void enteringQuickFind();
+    // Emitted when the quickfind bar is closed.
+    void exitingQuickFind();
+
+    void newWindow();
+    void openFileInNewWindow( const QString& fileName, uint64_t topLine,
+                              const QString& viewContext, const QString& searchText );
+    void windowActivated();
+    void windowClosed();
+    void exitRequested();
+
+  private:
+    void createActions();
+    void loadIcons();
+    void createMenus();
+    void createToolBars();
+    void createTrayIcon();
+    void readSettings();
+    void writeSettings();
+    bool loadFile( const QString& fileName, bool followFile = false );
+    bool loadFileInternal( const QString& fileName, const QString& viewContext = {} );
+    bool extractAndLoadFile( const QString& fileName );
+    void openCurrentFileInNewWindow();
+    void openRemoteFile( const QUrl& url );
+    void updateTitleBar( const QString& fileName );
+    void addRecentFile( const QString& fileName );
+    void updateRecentFileActions();
+    void clearRecentFileActions();
+    void updateFavoritesMenu();
+    void updateOpenedFilesMenu();
+    void updateHighlightersMenu();
+    QString strippedName( const QString& fullFileName ) const;
+    CrawlerWidget* currentCrawlerWidget() const;
+    void displayQuickFindBar( QuickFindMux::QFDirection direction );
+    void updateMenuBarFromDocument( const CrawlerWidget* crawler );
+    void updateInfoLine();
+    void showInfoLabels( bool show );
+    void logScreenInfo( QScreen* screen );
+    void removeFromFavorites( const QString& pathToRemove );
+    void removeFromRecent( const QString& pathToRemove );
+    void tryOpenClipboard( int tryTimes );
+    static QString currentTempRoot();
+    void updateShortcuts();
+    void exportEvents();
+    void exportAndOpenInPerfettoUI();
+    void showEventRulesManager();
+    void showLogParsingRulesDialog();
+
+    // Shared first phase of the event exports: ensures a completed extraction
+    // exists for the crawler's file, then continueEventExport runs the export
+    void prepareEventExport( CrawlerWidget* crawler, const QString& fileName,
+                             bool openInPerfettoUi );
+    void continueEventExport( klogg::api::ExtractionId extractionId, const QString& fileName,
+                              bool openInPerfettoUi );
+
+    void updateRecordActionState();
+    void showRecordCommandMenu();
+    void unbindRecorder();
+    void bindRecorder( const QString& commandName );
+
+    WindowSession session_;
+    QString loadingFileName;
+
+    std::array<QAction*, MAX_RECENT_FILES> recentFileActions;
+    QActionGroup* recentFilesGroup;
+
+    QMenu* fileMenu;
+    QMenu* recentFilesMenu;
+    QMenu* editMenu;
+    QMenu* viewMenu;
+    QMenu* toolsMenu;
+    QMenu* favoritesMenu;
+    HighlightersMenu* highlightersMenu;
+    QMenu* openedFilesMenu;
+    QMenu* helpMenu;
+
+    PathLine* infoLine;
+    QLabel* lineNbField;
+    QLabel* sizeField;
+    QLabel* dateField;
+    QLabel* encodingField;
+    QToolButton* eventCategoryButton = nullptr;
+    QMenu* eventCategoryMenu = nullptr;
+    QAction* eventCategoryAllAction = nullptr;
+    std::vector<QAction*> infoToolbarSeparators;
+
+    QToolBar* toolBar;
+
+    QAction* newWindowAction;
+    QAction* openInNewWindowAction;
+    QAction* openAction;
+    QAction* closeAction;
+    QAction* closeAllAction;
+    QAction* exitAction;
+    QAction* copyAction;
+    QAction* selectAllAction;
+    QAction* goToLineAction;
+    QAction* findAction;
+    QAction* clearLogAction;
+    QAction* copyPathToClipboardAction;
+    QAction* copyWithColorAction;
+    QAction* openContainingFolderAction;
+    QAction* openInEditorAction;
+    QAction* openClipboardAction;
+    QAction* openUrlAction;
+    QAction* overviewVisibleAction;
+    QAction* lineNumbersVisibleInMainAction;
+    QAction* lineNumbersVisibleInFilteredAction;
+    QAction* followAction;
+    QAction* goToTopAction;
+    QAction* textWrapAction;
+    QAction* chipModeAction;
+    QAction* reloadAction;
+    QAction* stopAction;
+    QAction* editHighlightersAction;
+    QAction* optionsAction;
+    QAction* showScratchPadAction;
+    QAction* showDocumentationAction;
+    QAction* aboutAction;
+    QAction* aboutQtAction;
+    QAction* predefinedFiltersDialogAction;
+    QAction* exportEventsAction;
+    QAction* visualizeInKloggAction;
+    QAction* exportToPerfettoUIAction;
+    QAction* manageEventRulesAction;
+    QAction* logParsingRulesAction;
+    QAction* reportIssueAction;
+
+    QAction* generateDumpAction;
+    QActionGroup* encodingGroup;
+    QAction* addToFavoritesAction;
+    QAction* addToFavoritesMenuAction;
+    QAction* removeFromFavoritesAction;
+    QAction* selectOpenFileAction;
+    QAction* recordAction;
+    QAction* recentFilesCleanup;
+    QActionGroup* favoritesGroup;
+    QActionGroup* openedFilesGroup;
+    QActionGroup* highlightersActionGroup = nullptr;
+
+    std::map<QString, QShortcut*> shortcuts_;
+
+    QSystemTrayIcon* trayIcon_;
+
+    QIcon mainIcon_;
+
+    IconLoader iconLoader_;
+
+    // Multiplex signals to any of the CrawlerWidgets
+    SignalMux signalMux_;
+
+    static QTranslator mTranslator;
+    static QTranslator mQtTranslator;
+
+    // QuickFind widget
+    QuickFindWidget quickFindWidget_;
+
+    // Multiplex signals to/from the QuickFindWidget
+    QuickFindMux quickFindMux_;
+
+    // The main widget
+    TabbedCrawlerWidget mainTabWidget_;
+
+    TabbedScratchPad scratchPad_;
+
+    RecorderManager recorderManager_;
+
+    QMap<QString, QString> recorderBindings_;
+    QString recordingFileName_;
+
+    // Temp dirs created by archive extraction; kept alive until window close.
+    std::vector<std::unique_ptr<QTemporaryDir>> archiveDirs_;
+
+    // Global chip mode state (shared across all crawlers)
+    bool globalChipMode_ = false;
+
+    bool isMaximized_ = false;
+    bool isCloseFromTray_ = false;
+
+    std::once_flag screenChangesConnect_;
+
+    // Pending state for open-in-new-window restore
+    uint64_t pendingTopLine_ = 0;
+    QString pendingSearchText_;
+
+    // Async event export progress
+    QProgressDialog* perfettoProgressDialog_ = nullptr;
+    SliceOverlayWidget* sliceOverlayWidget_ = nullptr;
+    std::optional<LineNumber> overlaySelectedLine_;
+    bool sliceOverlayEnabled_ = false;
+};
+
+#endif

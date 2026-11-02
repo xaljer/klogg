@@ -31,6 +31,7 @@
 
 #include "file_write_helper.h"
 #include "log.h"
+#include "log_qt.h"
 #include "test_utils.h"
 
 #include "logdata.h"
@@ -113,15 +114,16 @@ TEST_CASE( "Logdata decoding lines", "[logdata]" )
 
     writeDataToFile( file, 199, WriteFileModification::EndWithPartialLineBegin );
 
-    LogData logData;
+    LogData logData{ testPostTarget() };
 
-    auto finishedSpy
-        = std::make_unique<SafeQSignalSpy>( &logData, SIGNAL( loadingFinished( LoadingStatus ) ) );
+    std::vector<LoadingStatus> finishedStatuses;
+    logData.addLoadingFinishedListener(
+        [ &finishedStatuses ]( LoadingStatus status ) { finishedStatuses.push_back( status ); } );
 
-    logData.attachFile( QFileInfo{ file }.absoluteFilePath() );
+    logData.attachFile( QFileInfo{ file }.absoluteFilePath().toStdString() );
 
-    REQUIRE( finishedSpy->safeWait() );
-    REQUIRE( finishedSpy->count() == 1 );
+    REQUIRE( waitUiState( [ &finishedStatuses ] { return !finishedStatuses.empty(); } ) );
+    REQUIRE( finishedStatuses.size() == 1 );
     REQUIRE( logData.getNbLine() == 400_lcount );
 
     const auto rawLines = logData.getLinesRaw( 200_lnum, 200_lcount );
@@ -135,10 +137,17 @@ TEST_CASE( "Logdata decoding lines", "[logdata]" )
 
 TEST_CASE( "Logdata reading changing file", "[logdata]" )
 {
+    std::vector<MonitoredFileStatus> fileChanges;
+    LogDataCallbacks callbacks;
+    callbacks.onFileChanged = [ &fileChanges ]( MonitoredFileStatus status ) {
+        fileChanges.push_back( status );
+    };
 
-    LogData logData;
+    LogData logData{ testPostTarget(), callbacks };
 
-    SafeQSignalSpy changedSpy( &logData, SIGNAL( fileChanged( MonitoredFileStatus ) ) );
+    size_t loadingFinishedCount = 0;
+    logData.addLoadingFinishedListener(
+        [ &loadingFinishedCount ]( LoadingStatus ) { ++loadingFinishedCount; } );
 
     // Generate a small file
     QTemporaryFile file{ "testdecode_XXXXXX" };
@@ -146,12 +155,10 @@ TEST_CASE( "Logdata reading changing file", "[logdata]" )
         writeDataToFile( file );
     }
 
-    SafeQSignalSpy finishedSpy( &logData, SIGNAL( loadingFinished( LoadingStatus ) ) );
     // Start loading it
-    logData.attachFile( QFileInfo{ file }.absoluteFilePath() );
+    logData.attachFile( QFileInfo{ file }.absoluteFilePath().toStdString() );
     waitUiState( [ &logData ] { return logData.getNbLine() == 200_lcount; } );
-    REQUIRE( finishedSpy.safeWait() );
-    REQUIRE( finishedSpy.count() == 1 );
+    REQUIRE( waitUiState( [ &loadingFinishedCount ] { return loadingFinishedCount == 1; } ) );
 
     // Check we have the small file
     REQUIRE( logData.getNbLine() == 200_lcount );
@@ -171,7 +178,7 @@ TEST_CASE( "Logdata reading changing file", "[logdata]" )
     waitUiState( [ &logData ] { return logData.getNbLine() == 401_lcount; } );
 
     // Check we have a bigger file
-    REQUIRE( changedSpy.count() >= 1 );
+    REQUIRE( fileChanges.size() >= 1 );
     REQUIRE( logData.getNbLine() == 401_lcount );
     REQUIRE( logData.getMaxLength() == LineLength( SL_LINE_LENGTH ) );
     REQUIRE( logData.getFileSize()
@@ -190,7 +197,7 @@ TEST_CASE( "Logdata reading changing file", "[logdata]" )
         waitUiState( [ &logData ] { return logData.getNbLine() == 421_lcount; } );
 
         // Check we have a bigger file
-        REQUIRE( changedSpy.count() >= 2 );
+        REQUIRE( fileChanges.size() >= 2 );
         REQUIRE( logData.getNbLine() == 421_lcount );
         REQUIRE( logData.getMaxLength() == LineLength( SL_LINE_LENGTH ) );
         REQUIRE( logData.getFileSize()
@@ -205,7 +212,7 @@ TEST_CASE( "Logdata reading changing file", "[logdata]" )
         waitUiState( [ &logData ] { return logData.getNbLine() == 0_lcount; } );
 
         // Check we have an empty file
-        REQUIRE( changedSpy.count() >= 3 );
+        REQUIRE( fileChanges.size() >= 3 );
         REQUIRE( logData.getNbLine() == 0_lcount );
         REQUIRE( logData.getMaxLength().get() == 0 );
         REQUIRE( logData.getFileSize() == 0LL );
@@ -231,24 +238,27 @@ SCENARIO( "Attaching log data to files", "[logdata]" )
 
         WHEN( "Interrupt loading" )
         {
-            LogData log_data;
-            SafeQSignalSpy endSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
+            LogData log_data{ testPostTarget() };
+
+            std::vector<LoadingStatus> finishedStatuses;
+            log_data.addLoadingFinishedListener(
+                [ &finishedStatuses ]( LoadingStatus status ) {
+                    finishedStatuses.push_back( status );
+                } );
 
             // Start loading the VBL
-            log_data.attachFile( QFileInfo{ bigFile }.absoluteFilePath() );
+            log_data.attachFile( QFileInfo{ bigFile }.absoluteFilePath().toStdString() );
 
             // Immediately interrupt the loading
             log_data.interruptLoading();
 
-            REQUIRE( endSpy.safeWait( 10000 ) );
-
             THEN( "No file is attached" )
             {
                 // Check we have an empty file
-                REQUIRE( endSpy.count() == 1 );
-                QList<QVariant> arguments = endSpy.takeFirst();
-                REQUIRE( arguments.at( 0 ).toInt()
-                         == static_cast<int>( LoadingStatus::Interrupted ) );
+                REQUIRE( waitUiState(
+                    [ &finishedStatuses ] { return !finishedStatuses.empty(); }, 10000 ) );
+                REQUIRE( finishedStatuses.size() == 1 );
+                REQUIRE( finishedStatuses[ 0 ] == LoadingStatus::Interrupted );
 
                 REQUIRE( log_data.getNbLine() == 0_lcount );
                 REQUIRE( log_data.getMaxLength().get() == 0 );
@@ -258,15 +268,18 @@ SCENARIO( "Attaching log data to files", "[logdata]" )
 
         WHEN( "Try to reattach" )
         {
-            LogData log_data;
-            SafeQSignalSpy endSpy( &log_data, SIGNAL( loadingFinished( LoadingStatus ) ) );
+            LogData log_data{ testPostTarget() };
 
-            log_data.attachFile( QFileInfo{ smallFile }.absoluteFilePath() );
-            endSpy.safeWait( 10000 );
+            bool loadFinished = false;
+            log_data.addLoadingFinishedListener(
+                [ &loadFinished ]( LoadingStatus ) { loadFinished = true; } );
+
+            log_data.attachFile( QFileInfo{ smallFile }.absoluteFilePath().toStdString() );
+            REQUIRE( waitUiState( [ &loadFinished ] { return loadFinished; }, 10000 ) );
 
             THEN( "Throws" )
             {
-                CHECK_THROWS_AS( log_data.attachFile( QFileInfo{ bigFile }.absoluteFilePath() ), CantReattachErr );
+                CHECK_THROWS_AS( log_data.attachFile( QFileInfo{ bigFile }.absoluteFilePath().toStdString() ), CantReattachErr );
             }
         }
     }

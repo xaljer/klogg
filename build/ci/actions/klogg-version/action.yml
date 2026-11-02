@@ -1,0 +1,30 @@
+name: "Read klogg version"
+description: "Exports KLOGG_VERSION from build/version.cmake, suffixed with the short commit"
+runs:
+  using: "composite"
+  steps:
+    - name: Set klogg version
+      shell: sh
+      run: |
+        # Container jobs see the bind-mounted checkout owned by the host user,
+        # and git refuses to read such a repository as root.
+        git config --global --add safe.directory "$PWD"
+
+        # The version lives in one file so local and CI builds agree. The short
+        # commit only decorates file names, never the version baked into the
+        # binaries (that one comes from build/version.cmake via generated/version.h).
+        read_version() {
+          sed -n "s/^set($1[[:space:]]*\"\([^\"]*\)\".*/\1/p" build/version.cmake | head -n 1
+        }
+        ui=$(read_version KLOGG_UI_VERSION)
+        app=$(read_version KLOGG_APP_VERSION)
+        if [ -z "$ui" ] || [ -z "$app" ]; then
+          echo "could not read the version numbers from build/version.cmake" >&2
+          exit 1
+        fi
+        sha=$(git rev-parse --short HEAD)
+        # KLOGG_VERSION names the Qt packages (deb, dmg, Windows installer) and
+        # the release; the Electron installer follows the app version.
+        echo "KLOGG_VERSION=$ui-$sha" >> "$GITHUB_ENV"
+        echo "KLOGG_ELECTRON_VERSION=$app-$sha" >> "$GITHUB_ENV"
+        echo "klogg ui $ui app $app ($sha)"

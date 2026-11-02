@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>xterm.js log viewport spike | Klogg</title>
+<link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css">
+<style>
+  :root {
+    --bg: #1e1e2e;
+    --surface: #313244;
+    --overlay: #45475a;
+    --text: #cdd6f4;
+    --sub: #a6adc8;
+    --blue: #89b4fa;
+    --green: #a6e3a1;
+    --red: #f38ba8;
+    --yellow: #f9e2af;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.4 system-ui, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #toolbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--overlay);
+    flex-wrap: wrap;
+  }
+  #toolbar label { display: flex; align-items: center; gap: 5px; color: var(--sub); }
+  input[type=number] {
+    width: 84px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--overlay);
+    border-radius: 4px;
+    padding: 3px 6px;
+  }
+  input[type=range] { width: 130px; }
+  button {
+    background: var(--overlay);
+    color: var(--text);
+    border: 0;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  button:hover { background: #585b70; }
+  #log {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    padding: 8px 0 8px 8px;
+    overflow: hidden;
+  }
+  #gutter {
+    width: 70px;
+    flex: 0 0 70px;
+    overflow: hidden;
+    font: 14px/1.2 "Cascadia Mono", Consolas, monospace;
+    color: #6c7086;
+    user-select: none;
+  }
+  #gutter .grow {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding-right: 8px;
+    white-space: nowrap;
+  }
+  #gutter .num { color: #6c7086; }
+  #gutter .mark { color: var(--blue); }
+  #gutter .match { color: var(--red); }
+  #gutter .event { color: var(--yellow); }
+  #terminal {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    padding-left: 6px;
+  }
+  #terminal .xterm { padding: 0; }
+  #terminal .xterm-viewport { overflow: hidden !important; }
+  #status {
+    padding: 6px 12px;
+    background: var(--surface);
+    border-top: 1px solid var(--overlay);
+    color: var(--sub);
+    font: 12px/1.4 "Cascadia Mono", Consolas, monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <label>首行 <input id="jump" type="number" min="0" value="0" step="1"></label>
+  <label>可见逻辑行 <input id="lines" type="number" min="5" max="300" value="40"></label>
+  <label><input id="wrap" type="checkbox" checked> 折行 (100 列)</label>
+  <label>水平偏移 <input id="hscroll" type="range" min="0" max="400" value="0"></label>
+  <label><input id="follow" type="checkbox"> 跟随</label>
+  <button id="perf">性能测试 300 帧</button>
+</div>
+<div id="log">
+  <div id="gutter"></div>
+  <div id="terminal"></div>
+</div>
+<div id="status">loading…</div>
+
+<script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script src="node_modules/@xterm/addon-webgl/lib/addon-webgl.js"></script>
+<script src="sample.js"></script>
+<script src="spike.js"></script>
+</body>
+</html>

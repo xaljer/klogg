@@ -1,9 +1,10 @@
 add_executable(file_write_helper
         file_write_helper.cpp
         file_write_helper.h
+        persistentinfo_test_stub.cpp
 )
 
-target_link_libraries(file_write_helper klogg_utils tbb)
+target_link_libraries(file_write_helper klogg_utils klogg_settings tbb)
 
 add_executable(log_generator
         log_generator.cpp

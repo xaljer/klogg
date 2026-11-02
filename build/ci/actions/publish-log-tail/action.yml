@@ -1,0 +1,107 @@
+name: "Publish failing log tail"
+description: "Creates a neutral check run carrying the tail of a log file. Check runs are readable without repo admin rights, unlike job logs, so CI failures can be inspected without pasting logs."
+
+inputs:
+  log-file:
+    description: "Log file name, resolved inside the build root"
+    required: true
+  title:
+    description: "Title shown in the check run output"
+    required: false
+    default: "CI log tail"
+  max-lines:
+    description: "How many trailing lines to publish"
+    required: false
+    default: "400"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/github-script@v7
+      env:
+        LOG_FILE: ${{ inputs.log-file }}
+        LOG_TITLE: ${{ inputs.title }}
+        MAX_LINES: ${{ inputs.max-lines }}
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          // KLOGG_BUILD_ROOT is exported through GITHUB_ENV, so it is a real
+          // environment variable but not part of the `env` expression context.
+          const logPath = path.resolve(
+            process.env.GITHUB_WORKSPACE,
+            process.env.KLOGG_BUILD_ROOT || '',
+            process.env.LOG_FILE
+          );
+          if (!fs.existsSync(logPath)) {
+            // Publish the paths anyway: a missing log is itself the finding.
+            core.warning(`no log file at ${logPath}`);
+            const missing = [
+              `no log file at ${logPath}`,
+              `workspace: ${process.env.GITHUB_WORKSPACE}`,
+              `build root: ${process.env.KLOGG_BUILD_ROOT || '(unset)'}`,
+              `input: ${process.env.LOG_FILE}`,
+            ].join('\n');
+            try {
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: `log: ${process.env.GITHUB_JOB}`.slice(0, 100),
+                head_sha: context.sha,
+                status: 'completed',
+                conclusion: 'neutral',
+                output: { title: process.env.LOG_TITLE.slice(0, 255), summary: missing },
+              });
+            } catch (error) {
+              core.warning(`could not publish the missing-log note: ${error.message}`);
+            }
+            return;
+          }
+
+          const maxLines = Number(process.env.MAX_LINES) || 400;
+          const lines = fs.readFileSync(logPath, 'utf8').split('\n');
+
+          // The tail alone can miss errors from the start of a long build, so
+          // collect every diagnostic line as well. The tail is kept no matter
+          // what: linker failures only show up there, not as "error:" lines.
+          const diagnostic = /(error:|error C[0-9]|fatal error|FAILED:|undefined reference|ld: |duplicate symbol|Undefined symbols|referenced from|The following tests FAILED|^\s+\d+ - \S+ \(|^The following tests did not run)/;
+          const errors = lines.filter( ( line ) => diagnostic.test( line ) );
+
+          const truncate = ( text, budget ) =>
+            text.length > budget ? `${text.slice( 0, budget )}\n[... truncated ...]` : text;
+          const digest =
+            errors.length > 0
+              ? truncate( `errors (${errors.length} lines):\n${errors.slice( 0, 150 ).join('\n')}`, 26000 )
+              : 'no diagnostic lines found';
+          const tail = truncate( lines.slice( -maxLines ).join('\n'), 26000 );
+
+          // The Checks API caps output.summary at 65535 characters; both parts
+          // get their own budget so neither can push the other out.
+          const summaryBody = `${digest}\n\n--- tail (last ${maxLines} lines) ---\n${tail}`;
+
+          const header = [
+            `run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            `job: ${process.env.GITHUB_JOB}`,
+            `log: ${process.env.LOG_FILE} (last ${maxLines} lines)`,
+            '',
+          ].join('\n');
+
+          try {
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: `log: ${process.env.GITHUB_JOB}`.slice(0, 100),
+              head_sha: context.sha,
+              status: 'completed',
+              conclusion: 'neutral',
+              output: {
+                title: process.env.LOG_TITLE.slice(0, 255),
+                summary: ( header + summaryBody ).slice( 0, 65000 ),
+              },
+            });
+            core.info(`published ${process.env.LOG_FILE} tail as a check run`);
+          } catch (error) {
+            // Forks run with a read-only token; this must not hide the real failure.
+            core.warning(`could not publish the log tail: ${error.message}`);
+          }

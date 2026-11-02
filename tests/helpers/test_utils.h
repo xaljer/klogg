@@ -1,8 +1,14 @@
 #ifndef TEST_UTILS_H
 #define TEST_UTILS_H
 
-#include <string>
+#include <QCoreApplication>
+#include <QMetaObject>
+
 #include <chrono>
+#include <functional>
+#include <string>
+
+#include "posttarget.h"
 /*
 struct TestTimer {
     TestTimer()
@@ -46,8 +52,8 @@ class SafeQSignalSpy : public QSignalSpy {
 };
 
 template<typename F>
-bool waitUiState(F&& checkFunc ) {
-    for ( auto time = 0; time < 10000; time += 100 ) {
+bool waitUiState(F&& checkFunc, int timeoutMs = 10000 ) {
+    for ( auto time = 0; time < timeoutMs; time += 100 ) {
         if ( checkFunc() ) {
             return true;
         }
@@ -55,5 +61,14 @@ bool waitUiState(F&& checkFunc ) {
     }
     return false;
 };
+
+// Posts a task to the Qt main thread; waitUiState pumps the queue with qWait.
+inline PostTarget testPostTarget()
+{
+    return []( std::function<void()> task ) {
+        QMetaObject::invokeMethod( QCoreApplication::instance(), std::move( task ),
+                                   Qt::QueuedConnection );
+    };
+}
 
 #endif

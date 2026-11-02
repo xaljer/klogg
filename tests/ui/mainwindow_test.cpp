@@ -29,6 +29,8 @@
 #include "test_utils.h"
 
 #include "log.h"
+#include "log_qt.h"
+#include "persistentinfo.h"
 #include "mainwindow.h"
 #include "session.h"
 
@@ -124,6 +126,25 @@ SCENARIO( "Main window tests", "[ui]" )
                     {
                         REQUIRE( waitUiState( [&] { return filePathLabel->text().isEmpty(); } ) );
                     }
+                }
+            }
+
+            AND_WHEN( "Enable visualize in klogg" )
+            {
+                auto* action = mainWindow->visualizeInKloggActionForTest();
+                REQUIRE( action != nullptr );
+
+                runInUiThread( [&mainWindow] {
+                    PersistentInfo::getStore( app_settings{} )
+                        .setBool( "eventVisualization/sliceHoverOverlayEnabled", false );
+                    PersistentInfo::saveAppStore();
+                    mainWindow->visualizeInKloggActionForTest()->trigger();
+                } );
+
+                THEN( "Overlay becomes visible" )
+                {
+                    REQUIRE( waitUiState(
+                        [&] { return mainWindow->isSliceOverlayVisibleForTest(); } ) );
                 }
             }
         }
